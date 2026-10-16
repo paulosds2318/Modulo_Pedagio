@@ -44,6 +44,14 @@ const money = (c: number) =>
     c / 100
   );
 
+const maskCpf = (cpf: string) => {
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
+  }
+  return cpf;
+};
+
 const stages = [
   { key: "D0", label: "D+0: Emissão e Link Adyen", desc: "Envio de link Pay-by-link via e-mail e WhatsApp" },
   { key: "D5", label: "D+5: 1ª Tentativa no Cartão", desc: "Débito automático no cartão tokenizado (Coral)" },
@@ -227,7 +235,7 @@ export function LotDetailPage() {
           <div>
             <h2>Passagens Vinculadas ao Lote</h2>
             <p>
-              Cliente CPF: <span className="strong">{lot.cpfCliente}</span>
+              Cliente CPF: <span className="strong">{maskCpf(lot.cpfCliente)}</span>
               {lot.telefoneCliente && ` · Telefone: ${lot.telefoneCliente}`}
             </p>
           </div>
