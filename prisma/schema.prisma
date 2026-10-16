@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ContratoLocacao {
+  id             Int      @id @default(autoincrement())
+  numeroContrato String   @unique
+  cpfCliente     String
+  telefoneCliente String?
+  placa          String
+  dataRetirada   DateTime
+  dataDevolucao  DateTime
+  lojaRetirada   String
+
+  @@index([placa, dataRetirada, dataDevolucao])
+  @@map("contratos_locacao")
+}
+
+model PassagemPedagio {
+  id              Int          @id @default(autoincrement())
+  idConectcar     String       @unique
+  numeroContrato  String
+  cpfCliente      String
+  telefoneCliente String?
+  placa           String
+  tag             String
+  praca           String
+  rodovia         String
+  dataHora        DateTime
+  valorCentavos   Int
+  lojaRetirada    String
+  loteId          Int?
+  lote            LoteCobranca? @relation(fields: [loteId], references: [id])
+
+  @@index([numeroContrato])
+  @@index([loteId])
+  @@map("passagens_pedagio")
+}
+
+model LoteCobranca {
+  id                  Int             @id @default(autoincrement())
+  numeroContrato      String
+  cpfCliente          String
+  telefoneCliente     String?
+  quantidadePassagens Int
+  valorTotalCentavos  Int
+  taxaCentavos        Int             @default(0)
+  valorFinalCentavos  Int
+  status              String          @default("PENDENTE")
+  adyenLinkId         String?
+  adyenPaymentUrl     String?
+  adyenPspReference   String?
+  etapaRegua          String          @default("D0")
+  dataCriacao         DateTime        @default(now())
+  dataPagamento       DateTime?
+  d5TentativaAt       DateTime?
+  d7LembreteAt        DateTime?
+  d10TentativaAt      DateTime?
+  processandoAte      DateTime?
+  passagens           PassagemPedagio[]
+  logs                LogRegua[]
+
+  @@index([numeroContrato])
+  @@index([status])
+  @@map("lotes_cobranca")
+}
+
+model LogRegua {
+  id                Int          @id @default(autoincrement())
+  loteId            Int
+  etapa             String
+  acao              String
+  canal             String
+  resultado         String
+  detalhesResposta  String?
+  providerMessageId String?
+  dataHora          DateTime     @default(now())
+  lote              LoteCobranca @relation(fields: [loteId], references: [id])
+
+  @@index([loteId])
+  @@index([providerMessageId])
+  @@map("logs_regua")
+}
