@@ -34,7 +34,6 @@ export function CompilationPage() {
   const [fee, setFee] = useState("0,00");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,27 +73,6 @@ export function CompilationPage() {
 
   const feeCentavos = Math.round((Number(fee.replace(",", ".")) || 0) * 100);
   const finalTotal = total + feeCentavos;
-
-  async function syncConectCar() {
-    setSyncing(true);
-    setNotice("");
-    try {
-      const r = await fetch("/api/passagens/sincronizar", {
-        method: "POST",
-      });
-      const body = await r.json();
-      if (!r.ok) throw new Error(body.error || "Erro na sincronização.");
-      setNotice(
-        `Sincronização ConectCar concluída: ${body.importadas} importadas, ${body.semContrato} sem contrato, ${body.contratosSobrepostos} com locações sobrepostas e ${body.jaEmLote} já faturadas.`
-      );
-      const refreshed = await fetch("/api/passagens/pendentes");
-      if (refreshed.ok) setAll(await refreshed.json());
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Falha ao sincronizar com ConectCar.");
-    } finally {
-      setSyncing(false);
-    }
-  }
 
   async function compile() {
     const feeValue = Number(fee.replace(",", "."));
@@ -173,25 +151,9 @@ export function CompilationPage() {
             marginBottom: "20px",
           }}
         >
-          👁️ <strong>Perfil de Visualização:</strong> Você possui acesso em modo somente leitura. A compilação de lotes e a sincronização com a ConectCar são restritas ao perfil <strong>Administrador</strong>.
+          <strong>Perfil de visualizacao:</strong> Compilacao de lotes disponivel apenas para administradores.
         </div>
       )}
-
-      <section className="panel sync-panel">
-        <div>
-          <h2>Sincronização ConectCar</h2>
-          <p>
-            Importa passagens da concessionária e correlaciona placa, data e hora com o sistema Coral.
-          </p>
-        </div>
-        <div className="sync-controls">
-          <button className="button secondary" disabled={syncing || isViewer}
-            title={isViewer ? "Acesso restrito a administradores" : undefined}
-            onClick={() => void syncConectCar()}>
-            {syncing ? "Sincronizando..." : "Sincronizar agora"}
-          </button>
-        </div>
-      </section>
 
       <section className="panel">
         <div className="filter-bar">

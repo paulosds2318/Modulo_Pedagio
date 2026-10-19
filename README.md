@@ -43,10 +43,9 @@ O Docker Compose serve para desenvolvimento e validação do container. O deploy
 
 ## Integrações e contratos canônicos
 
-Os endpoints e tokens variam conforme os contratos reais da ConectCar, Coral e provedor de WhatsApp. Os adaptadores deste projeto usam payloads canônicos; conecte/mapeie os campos do fornecedor antes de apontar as URLs para produção.
 
 - `POST /api/locacoes/sincronizar`: recebe `[{numeroContrato, cpfCliente, telefoneCliente?, placa, dataRetirada, dataDevolucao, lojaRetirada}]` do Coral; autenticação `Bearer CORAL_RENTALS_SYNC_SECRET`.
-- `POST /api/passagens/sincronizar`: consulta `CONECTCAR_API_URL`, que deve responder com array ou `{items:[]}` no formato `{idConectcar, placa, tag, praca, rodovia, dataHora, valorCentavos}`. O app cruza placa e data da passagem com períodos de locação. A rota aceita `Bearer CONECTCAR_SYNC_SECRET` ou sessao de administrador.
+- `POST /api/passagens`: importa de 1 a 500 passagens no formato `{idOrigem, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer PASSAGES_IMPORT_SECRET`. O aplicativo nao consulta APIs de fornecedores de passagens; a origem escolhida pela operacao deve enviar os dados para esse endpoint.
 - `POST /api/lotes/compilar`: cria o lote, tenta criar Pay-by-link Adyen e envia a notificação inicial pelo gateway WhatsApp.
 - `GET` ou `POST /api/cron/regua`: executar diariamente com `Authorization: Bearer CRON_SECRET`. Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.

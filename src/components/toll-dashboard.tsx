@@ -80,7 +80,7 @@ export function TollDashboard() {
           </span>
           <h1>Visão Geral da Operação</h1>
           <p>
-            Monitoramento diário de passagens ConectCar, conciliação de pagamentos e esteira de cobrança.
+            Monitoramento diario de passagens, conciliacao de pagamentos e esteira de cobranca.
           </p>
         </div>
         <Link className="button primary" href="/compilacao">
@@ -256,7 +256,7 @@ export function TollDashboard() {
       <section className="quick-links">
         <Link className="quick-link" href="/compilacao">
           <strong>Compilar Novas Passagens</strong>
-          <span>Filtre as passagens importadas da ConectCar e gere um novo lote para faturamento.</span>
+          <span>Filtre as passagens importadas e gere um novo lote para faturamento.</span>
         </Link>
         <Link className="quick-link" href="/lotes">
           <strong>Acompanhar Régua de Cobrança</strong>
