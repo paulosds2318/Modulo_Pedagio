@@ -32,8 +32,9 @@ export function TollDashboard() {
             "Não foi possível carregar os dados de pedágio. Verifique a conexão com o banco de dados."
           );
         }
+        const lotsData = await l.json();
         setPassages((await p.json()).length);
-        setLots(await l.json());
+        setLots(Array.isArray(lotsData) ? lotsData : (lotsData.data || []));
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
