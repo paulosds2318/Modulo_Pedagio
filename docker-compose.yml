@@ -29,7 +29,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-toll_manager}:${POSTGRES_PASSWORD:-toll_manager_dev}@db:5432/${POSTGRES_DB:-toll_manager}?schema=public
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-foco-toll-manager-better-auth-secret-key-2026}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       FRAME_ANCESTORS: ${FRAME_ANCESTORS:-'self'}
       ADYEN_API_KEY: ${ADYEN_API_KEY:-}
@@ -48,7 +48,6 @@ services:
       WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
       WHATSAPP_WEBHOOK_TOKEN: ${WHATSAPP_WEBHOOK_TOKEN:-}
       CRON_SECRET: ${CRON_SECRET:-}
-      OPERATIONS_API_TOKEN: ${OPERATIONS_API_TOKEN:-}
     ports:
       - "${PORT:-3000}:3000"
 

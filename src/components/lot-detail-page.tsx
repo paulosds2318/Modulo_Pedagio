@@ -64,11 +64,10 @@ export function LotDetailPage() {
   const params = useParams<{ id: string }>();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
-  const isViewer = Boolean(session?.user && role === "viewer");
+  const isViewer = !session?.user || role !== "admin";
 
   const [lot, setLot] = useState<Lot | null>(null);
   const [error, setError] = useState("");
-  const [opsToken, setOpsToken] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -86,9 +85,30 @@ export function LotDetailPage() {
   }
 
   useEffect(() => {
-    void reload()
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    async function loadLot() {
+      try {
+        const response = await fetch(`/api/lotes/${params.id}`);
+        let data;
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error(`Servidor retornou status ${response.status} (${response.statusText})`);
+        }
+        if (!response.ok) throw new Error(data?.error || "Erro ao carregar detalhes do lote.");
+        if (!cancelled) setLot(data);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar detalhes do lote.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadLot();
+    return () => {
+      cancelled = true;
+    };
   }, [params.id]);
 
   async function settle(status: "PAGO" | "INADIMPLENTE") {
@@ -99,7 +119,6 @@ export function LotDetailPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-ops-token": opsToken,
         },
         body: JSON.stringify({ status, nota: note }),
       });
@@ -285,40 +304,15 @@ export function LotDetailPage() {
         <div className="panel-head">
           <div>
             <h2>Baixa Manual e Encerramento de Cobrança</h2>
-            <p className="muted">
-              Permite a baixa administrativa do lote (ex: pagamento efetuado diretamente na loja ou negociação direta).
-            </p>
           </div>
         </div>
 
-        {isViewer && (
-          <div
-            className="selection-summary"
-            style={{
-              background: "#F3F4F6",
-              borderColor: "var(--line)",
-              color: "var(--ink-secondary)",
-              marginBottom: "16px",
-            }}
-          >
-            👁️ <strong>Perfil de Visualização:</strong> Você possui acesso em modo somente leitura. A baixa manual e o encerramento administrativo são restritos ao perfil <strong>Administrador</strong>.
-          </div>
-        )}
-
         <p className="muted" style={{ marginBottom: "12px", fontSize: "12px" }}>
-          Esta ação exige o token operacional configurado em <code>OPERATIONS_API_TOKEN</code> e justificativa obrigatória registrada em auditoria.
+          Esta acao exige uma sessao de administrador e justificativa registrada em auditoria.
         </p>
 
         <div className="manual-form">
-          <input
-            type="password"
-            value={opsToken}
-            onChange={(e) => setOpsToken(e.target.value)}
-            placeholder="Token operacional de autorização"
-            autoComplete="off"
-            disabled={isViewer}
-          />
-          <input
+<input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Justificativa da baixa manual (mínimo 3 caracteres)"
@@ -327,7 +321,7 @@ export function LotDetailPage() {
           />
           <button
             className="button primary"
-            disabled={isViewer || busy || !opsToken || note.trim().length < 3 || lot.status === "PAGO"}
+            disabled={isViewer || busy || note.trim().length < 5 || lot.status === "PAGO"}
             title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void settle("PAGO")}
           >
@@ -335,7 +329,7 @@ export function LotDetailPage() {
           </button>
           <button
             className="button secondary"
-            disabled={isViewer || busy || !opsToken || note.trim().length < 3 || lot.status === "INADIMPLENTE"}
+            disabled={isViewer || busy || note.trim().length < 5 || lot.status === "INADIMPLENTE"}
             title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void settle("INADIMPLENTE")}
           >

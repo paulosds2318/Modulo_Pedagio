@@ -4,55 +4,34 @@ import { admin } from "better-auth/plugins";
 import { db } from "./db.ts";
 import { timingSafeEqual } from "node:crypto";
 
+const authSecret = process.env.BETTER_AUTH_SECRET?.trim();
 export const auth = betterAuth({
-  database: prismaAdapter(db, {
-    provider: "postgresql",
-  }),
-  secret: process.env.BETTER_AUTH_SECRET || "foco-toll-manager-better-auth-secret-key-2026",
+  database: prismaAdapter(db, { provider: "postgresql" }),
+  secret: authSecret || "local-development-secret-only-do-not-deploy",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true,
   },
-  plugins: [
-    admin({
-      defaultRole: "viewer",
-      adminRoles: ["admin"],
-    }),
-  ],
+  plugins: [admin({ defaultRole: "viewer", adminRoles: ["admin"] })],
 });
 
 export type UserRole = "admin" | "viewer";
 
 export async function getServerSession() {
   try {
+    if (process.env.NODE_ENV === "production" && !authSecret) return null;
     const { headers } = await import("next/headers");
-    const reqHeaders = await headers();
-    const cookieHeader = reqHeaders.get("cookie") || "";
-    if (cookieHeader.includes("foco_admin_session=admin_logged_in")) {
-      return {
-        user: {
-          id: "usr_admin_foco",
-          name: "Administrador Foco",
-          email: "admin@focoalugueldecarros.com.br",
-          role: "admin",
-          emailVerified: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        session: {
-          id: "sess_admin_foco",
-          userId: "usr_admin_foco",
-          token: "foco_admin_token",
-          expiresAt: new Date(Date.now() + 86400000 * 7),
-        },
-      };
-    }
-    return await auth.api.getSession({
-      headers: reqHeaders,
-    });
+    return await auth.api.getSession({ headers: await headers() });
   } catch {
     return null;
   }
+}
+
+export function hasRole(session: unknown, role: UserRole): boolean {
+  if (!session || typeof session !== "object" || !("user" in session)) return false;
+  const user = (session as { user?: unknown }).user;
+  return Boolean(user && typeof user === "object" && "role" in user && (user as { role?: unknown }).role === role);
 }
 
 export function hasBearerSecret(request: Request, secret: string | undefined) {

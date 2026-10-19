@@ -4,12 +4,21 @@ import { hashPassword } from "better-auth/crypto";
 const db = new PrismaClient();
 
 async function main() {
+  const adminPasswordValue = process.env.SEED_ADMIN_PASSWORD;
+  const viewerPasswordValue = process.env.SEED_VIEWER_PASSWORD;
+  if (!adminPasswordValue || !viewerPasswordValue) {
+    throw new Error("Defina SEED_ADMIN_PASSWORD e SEED_VIEWER_PASSWORD para executar o seed de desenvolvimento.");
+  }
+  if (adminPasswordValue.length < 12 || viewerPasswordValue.length < 12) {
+    throw new Error("As senhas de seed devem ter pelo menos 12 caracteres.");
+  }
+
   const now = new Date();
   const start = new Date(now.getTime() - 2 * 86400000);
   const end = new Date(now.getTime() + 86400000);
 
   // 1. Criar Usuário Administrador (Perfil ADMIN)
-  const adminPassword = await hashPassword("FocoAdmin2026!");
+  const adminPassword = await hashPassword(adminPasswordValue);
   const adminUser = await db.user.upsert({
     where: { email: "admin@focoalugueldecarros.com.br" },
     create: {
@@ -43,7 +52,7 @@ async function main() {
   });
 
   // 2. Criar Usuário de Visualização (Perfil VISUALIZAÇÃO)
-  const viewerPassword = await hashPassword("FocoViewer2026!");
+  const viewerPassword = await hashPassword(viewerPasswordValue);
   const viewerUser = await db.user.upsert({
     where: { email: "visualizador@focoalugueldecarros.com.br" },
     create: {
@@ -121,8 +130,7 @@ async function main() {
 
   console.log("--------------------------------------------------");
   console.log("Carga inicial de dados e perfis Better Auth concluída!");
-  console.log("Perfil ADMIN: admin@focoalugueldecarros.com.br / FocoAdmin2026!");
-  console.log("Perfil VIEWER: visualizador@focoalugueldecarros.com.br / FocoViewer2026!");
+  console.log("Development users created; credentials are not displayed.");
   console.log("--------------------------------------------------");
 }
 

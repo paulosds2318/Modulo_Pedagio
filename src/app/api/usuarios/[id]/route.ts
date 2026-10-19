@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getServerSession } from "@/lib/auth";
+import { getServerSession, hasRole } from "@/lib/auth";
 import { hashPassword } from "better-auth/crypto";
 
 export const runtime = "nodejs";
@@ -11,9 +11,7 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
-
-  if (!session || role !== "admin") {
+  if (!session || !hasRole(session, "admin")) {
     return NextResponse.json(
       { error: "Acesso restrito ao perfil de Administrador." },
       { status: 403 }
@@ -41,32 +39,25 @@ export async function PUT(
       );
     }
 
-    const updatedUser = await db.user.update({
-      where: { id },
-      data: {
-        name,
-        role: newRole,
-        updatedAt: new Date(),
-      },
-    });
-
-    // Se informou nova senha, atualiza na tabela de contas
-    if (password) {
-      if (password.length < 8) {
-        return NextResponse.json(
-          { error: "A nova senha deve ter pelo menos 8 caracteres." },
-          { status: 400 }
-        );
-      }
-      const hashedPassword = await hashPassword(password);
-      await db.account.updateMany({
-        where: { userId: id, providerId: "credential" },
-        data: {
-          password: hashedPassword,
-          updatedAt: new Date(),
-        },
-      });
+    if (password && password.length < 8) {
+      return NextResponse.json({ error: "A nova senha deve ter pelo menos 8 caracteres." }, { status: 400 });
     }
+
+    const hashedPassword = password ? await hashPassword(password) : null;
+    const updatedUser = await db.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { name, role: newRole, updatedAt: new Date() },
+      });
+      if (hashedPassword) {
+        const result = await tx.account.updateMany({
+          where: { userId: id, providerId: "credential" },
+          data: { password: hashedPassword, updatedAt: new Date() },
+        });
+        if (!result.count) throw new Error("Credential account not found.");
+      }
+      return updated;
+    });
 
     return NextResponse.json({
       success: true,
@@ -91,10 +82,9 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  const currentUserId = (session?.user as { id?: string } | undefined)?.id;
+  const currentUserId = session?.user.id;
 
-  if (!session || role !== "admin") {
+  if (!session || !hasRole(session, "admin")) {
     return NextResponse.json(
       { error: "Acesso restrito ao perfil de Administrador." },
       { status: 403 }

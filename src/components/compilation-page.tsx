@@ -24,7 +24,7 @@ const money = (c: number) =>
 export function CompilationPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
-  const isViewer = Boolean(session?.user && role === "viewer");
+  const isViewer = !session?.user || role !== "admin";
 
   const [all, setAll] = useState<Passage[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
@@ -34,7 +34,6 @@ export function CompilationPage() {
   const [fee, setFee] = useState("0,00");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [syncToken, setSyncToken] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -82,7 +81,6 @@ export function CompilationPage() {
     try {
       const r = await fetch("/api/passagens/sincronizar", {
         method: "POST",
-        headers: { Authorization: `Bearer ${syncToken}` },
       });
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || "Erro na sincronização.");
@@ -122,7 +120,7 @@ export function CompilationPage() {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || "Erro ao compilar lote.");
       setNotice(
-        `Lote #${body.id} compilado com sucesso! A régua D+0 foi disparada via Adyen e WhatsApp.`
+        `Lote #${body.id} criado. Confira o historico para ver os resultados das integracoes.`
       );
       setSelected([]);
       setAll((items) => items.filter((p) => !selected.includes(p.id)));
@@ -187,21 +185,10 @@ export function CompilationPage() {
           </p>
         </div>
         <div className="sync-controls">
-          <input
-            type="password"
-            value={syncToken}
-            onChange={(e) => setSyncToken(e.target.value)}
-            placeholder="Token da API ConectCar"
-            autoComplete="off"
-            disabled={isViewer}
-          />
-          <button
-            className="button secondary"
-            disabled={!syncToken || syncing || isViewer}
-            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
-            onClick={() => void syncConectCar()}
-          >
-            {syncing ? "Sincronizando…" : "Sincronizar agora"}
+          <button className="button secondary" disabled={syncing || isViewer}
+            title={isViewer ? "Acesso restrito a administradores" : undefined}
+            onClick={() => void syncConectCar()}>
+            {syncing ? "Sincronizando..." : "Sincronizar agora"}
           </button>
         </div>
       </section>

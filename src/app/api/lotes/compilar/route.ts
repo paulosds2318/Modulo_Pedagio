@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { createPaymentLink } from "@/lib/adyen";
 import { buildPaymentMessage, sendWhatsAppMessage } from "@/lib/services/whatsapp";
-import { getServerSession } from "@/lib/auth";
+import { getServerSession, hasRole } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -25,11 +25,9 @@ const schema = z
 export async function POST(request: Request) {
   // Guarda de Sessão: Perfil de visualização não possui permissão para compilar lotes
   const session = await getServerSession();
-  if (session && (session.user as { role?: string })?.role === "viewer") {
-    return NextResponse.json(
-      { error: "Acesso negado: Perfil de visualização não possui permissão para compilar lotes." },
-      { status: 403 }
-    );
+  if (!session) return NextResponse.json({ error: "Autenticacao necessaria." }, { status: 401 });
+  if (!hasRole(session, "admin")) {
+    return NextResponse.json({ error: "Acesso restrito a administradores." }, { status: 403 });
   }
 
   let body: unknown;

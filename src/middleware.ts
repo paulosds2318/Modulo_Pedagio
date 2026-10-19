@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Rotas públicas que não precisam de autenticação
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health", "/api/webhooks", "/foco-logo.png", "/_next", "/favicon"];
+const PUBLIC_PAGE_PATHS = ["/login", "/_next", "/favicon"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Libera rotas públicas
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
-  }
+  // Each API route validates its own session, role, bearer token, or webhook signature.
+  if (pathname.startsWith("/api/")) return NextResponse.next();
+  if (PUBLIC_PAGE_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
 
-  // Verifica se há cookie de sessão do Better Auth
   const sessionCookie =
     request.cookies.get("better-auth.session_token") ??
     request.cookies.get("__Secure-better-auth.session_token");
@@ -27,14 +24,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths EXCEPT:
-     * - _next/static, _next/image (Next.js assets)
-     * - favicon.ico
-     * - public files with extensions (png, jpg, svg, etc.)
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js)).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js)).*)"],
 };
-

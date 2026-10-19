@@ -94,8 +94,43 @@ export function LotsPage() {
   );
 
   useEffect(() => {
-    fetchLots(1);
-  }, [fetchLots]);
+    let cancelled = false;
+
+    async function loadLots() {
+      const params = new URLSearchParams();
+      params.set("page", "1");
+      params.set("limit", String(pagination.limit));
+      if (search.trim()) params.set("search", search.trim());
+      if (status !== "TODOS") params.set("status", status);
+      if (etapaRegua !== "TODAS") params.set("etapaRegua", etapaRegua);
+      if (dataInicio) params.set("dataInicio", dataInicio);
+      if (dataFim) params.set("dataFim", dataFim);
+
+      try {
+        const response = await fetch(`/api/lotes?${params.toString()}`);
+        if (!response.ok) throw new Error("Falha ao carregar a lista de lotes.");
+        const result = await response.json();
+        if (cancelled) return;
+
+        if (result.data) {
+          setLots(result.data);
+          setPagination(result.pagination);
+        } else if (Array.isArray(result)) {
+          setLots(result);
+          setPagination({ page: 1, limit: 10, total: result.length, totalPages: 1 });
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Erro inesperado.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadLots();
+    return () => {
+      cancelled = true;
+    };
+  }, [pagination.limit, search, status, etapaRegua, dataInicio, dataFim]);
 
   function handleFilterSubmit(e: React.FormEvent) {
     e.preventDefault();

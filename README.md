@@ -1,4 +1,4 @@
-﻿# Toll Manager App
+# Toll Manager App
 
 Aplicação TypeScript/Next.js para organizar passagens de pedágio, compilar lotes e acompanhar uma régua D+0/D+5/D+7/D+10. Usa Prisma e PostgreSQL, adequada para rodar em container ou hospedagem web.
 
@@ -14,11 +14,11 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-Abra `http://localhost:3000`. Para dados falsos locais, depois que as migrações estiverem aplicadas, rode `npm run seed:dev`.
+Para dados locais de demonstracao, aplique as migracoes, defina `SEED_ADMIN_PASSWORD` e `SEED_VIEWER_PASSWORD` (minimo 12 caracteres) e execute `npm run seed:dev`. O seed nao possui senhas padrao.
 
 ### Rodar aplicação e banco com Docker
 
-Copie `.env.example` para `.env`, configure pelo menos as credenciais do banco e execute:
+Copie `.env.example` para `.env`, configure o banco e gere um `BETTER_AUTH_SECRET` forte antes de executar:
 
 ```powershell
 docker compose up --build -d
@@ -46,13 +46,13 @@ O Docker Compose serve para desenvolvimento e validação do container. O deploy
 Os endpoints e tokens variam conforme os contratos reais da ConectCar, Coral e provedor de WhatsApp. Os adaptadores deste projeto usam payloads canônicos; conecte/mapeie os campos do fornecedor antes de apontar as URLs para produção.
 
 - `POST /api/locacoes/sincronizar`: recebe `[{numeroContrato, cpfCliente, telefoneCliente?, placa, dataRetirada, dataDevolucao, lojaRetirada}]` do Coral; autenticação `Bearer CORAL_RENTALS_SYNC_SECRET`.
-- `POST /api/passagens/sincronizar`: consulta `CONECTCAR_API_URL`, que deve responder com array ou `{items:[]}` no formato `{idConectcar, placa, tag, praca, rodovia, dataHora, valorCentavos}`. O app cruza placa e data da passagem com períodos de locação. A rota exige `Bearer CONECTCAR_SYNC_SECRET`.
+- `POST /api/passagens/sincronizar`: consulta `CONECTCAR_API_URL`, que deve responder com array ou `{items:[]}` no formato `{idConectcar, placa, tag, praca, rodovia, dataHora, valorCentavos}`. O app cruza placa e data da passagem com períodos de locação. A rota aceita `Bearer CONECTCAR_SYNC_SECRET` ou sessao de administrador.
 - `POST /api/lotes/compilar`: cria o lote, tenta criar Pay-by-link Adyen e envia a notificação inicial pelo gateway WhatsApp.
 - `GET` ou `POST /api/cron/regua`: executar diariamente com `Authorization: Bearer CRON_SECRET`. Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.
 - `POST /api/webhooks/whatsapp`: contrato `{messageId,status,details?}` e `Authorization: Bearer WHATSAPP_WEBHOOK_TOKEN`.
 - `GET /api/lotes/[id]`: retorna lote, passagens e auditoria.
-- `PATCH /api/lotes/[id]`: baixa manual `PAGO`/`INADIMPLENTE`, exige `x-ops-token: OPERATIONS_API_TOKEN` e nota auditável.
+- `PATCH /api/lotes/[id]`: baixa manual para `PAGO`/`INADIMPLENTE`; exige sessao de administrador e nota auditavel.
 
 O gateway WhatsApp espera `POST {to,text,reference}` e pode retornar `{messageId}`. O endpoint Coral para token espera `POST {numeroContrato,cpfCliente}` e responde `{storedPaymentMethodId}`. Ajuste esses adaptadores ao contrato autenticado real. PAN e CVV não são armazenados.
 
@@ -60,5 +60,5 @@ O gateway WhatsApp espera `POST {to,text,reference}` e pode retornar `{messageId
 
 Preencha `.env` local com as URLs, tokens e chaves. Nunca publique credenciais. A integração de cartão tokenizado depende de autorização, consentimento e disponibilidade do token no Coral. O cron deve ser invocado por um scheduler persistente; acessar a página não executa a régua.
 
-Antes de produção: configurar autenticação de usuário nas páginas/APIs, validar payloads e HMAC dos provedores, verificar duplicidade/retentativas, configurar backups, observabilidade, HTTPS, políticas de iframe do Coral e confirmar o ambiente de testes da Adyen.
+Antes de publicar: confirme os contratos das integracoes, valide payloads e HMAC, configure retentativas, backups, observabilidade, HTTPS e politica de iframe do Coral. Rotas de dados exigem sessao Better Auth; rotas administrativas exigem perfil admin. O Docker Compose exige `BETTER_AUTH_SECRET` no `.env`.
 

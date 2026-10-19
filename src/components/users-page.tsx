@@ -61,9 +61,29 @@ export function UsersPage() {
   }
 
   useEffect(() => {
-    if (isAdmin) {
-      loadUsers();
+    if (!isAdmin) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const response = await fetch("/api/usuarios");
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error || "Erro ao consultar usuarios.");
+        }
+        const data = await response.json();
+        if (!cancelled) setUsers(data);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Erro desconhecido.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [isAdmin]);
 
   async function handleCreateUser(e: React.FormEvent) {

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { isValidAdyenHmac } from "../src/lib/adyen.ts";
-import { hasBearerSecret } from "../src/lib/auth.ts";
+import { hasBearerSecret, hasRole } from "../src/lib/auth.ts";
 import type { UserRole } from "../src/lib/auth.ts";
 
 test("Segurança de Pagamento - HMAC Adyen: Aceita assinatura válida", () => {
@@ -115,4 +115,10 @@ test("Segurança de Perfis - Validação de Papéis RBAC (Admin vs Visualizaçã
   assert.equal(canPerformAdminActions("viewer"), false);
   assert.equal(canPerformAdminActions(undefined), false);
   assert.equal(canPerformAdminActions("other"), false);
+});
+
+test("Authorization: only admin gets administrative permissions", () => {
+  assert.equal(hasRole({ user: { role: "admin" } }, "admin"), true);
+  assert.equal(hasRole({ user: { role: "viewer" } }, "admin"), false);
+  assert.equal(hasRole(null, "admin"), false);
 });

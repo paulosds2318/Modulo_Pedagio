@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { hasBearerSecret, getServerSession } from "@/lib/auth";
+import { hasBearerSecret, getServerSession, hasRole } from "@/lib/auth";
 import { fetchConectCarPassages } from "@/lib/services/conectcar";
 
 export const runtime = "nodejs";
@@ -10,14 +10,13 @@ export async function POST(request: Request) {
   const hasBearer = hasBearerSecret(request, process.env.CONECTCAR_SYNC_SECRET);
   if (!hasBearer) {
     const session = await getServerSession();
-    const role = (session?.user as { role?: string } | undefined)?.role;
     if (!session) {
       return NextResponse.json(
         { error: "Não autorizado ou CONECTCAR_SYNC_SECRET não configurado." },
         { status: process.env.CONECTCAR_SYNC_SECRET ? 401 : 503 }
       );
     }
-    if (role === "viewer") {
+    if (!hasRole(session, "admin")) {
       return NextResponse.json(
         { error: "Acesso negado: Perfil de visualização não possui permissão para sincronizar com a ConectCar." },
         { status: 403 }

@@ -87,7 +87,7 @@ async function tryCardCharge(
   // 4. Trava Anti-Duplicidade: Expirar link de pagamento ativo antes de tentar o débito
   if (fresh.adyenLinkId) {
     try {
-      const expireResult = await expirePaymentLink(fresh.adyenLinkId, fresh.id);
+      await expirePaymentLink(fresh.adyenLinkId, fresh.id);
       await addLog(
         lot.id,
         stage,
@@ -299,7 +299,7 @@ export async function processBillingRule(now = new Date()) {
 
         await db.loteCobranca.update({
           where: { id: lot.id },
-          data: { d7LembreteAt: now, etapaRegua: "D7" },
+          data: { ...(sendStatus === "ENVIADO" ? { d7LembreteAt: now } : {}), etapaRegua: "D7" },
         });
         await addLog(
           lot.id,
