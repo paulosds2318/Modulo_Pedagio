@@ -75,8 +75,13 @@ export function LotDetailPage() {
 
   async function reload() {
     const r = await fetch(`/api/lotes/${params.id}`);
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || "Erro ao carregar detalhes do lote.");
+    let data;
+    try {
+      data = await r.json();
+    } catch {
+      throw new Error(`Servidor retornou status ${r.status} (${r.statusText})`);
+    }
+    if (!r.ok) throw new Error(data?.error || "Erro ao carregar detalhes do lote.");
     setLot(data);
   }
 
