@@ -36,261 +36,255 @@ export default function LoginPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #1a0000 0%, #3d0000 40%, #C20000 80%, #F20000 100%)",
+        background: "radial-gradient(ellipse at 50% -20%, #FAFBFB 0%, #EEF2F4 60%, #E2E8F0 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: "24px",
         position: "relative",
-        overflow: "hidden",
       }}
     >
-      {/* Círculos decorativos */}
+      {/* Barra superior de acento com a cor institucional Foco */}
       <div
         style={{
           position: "absolute",
-          width: "500px",
-          height: "500px",
-          borderRadius: "50%",
-          border: "1px solid rgba(255,255,255,0.06)",
-          top: "-120px",
-          right: "-120px",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: "350px",
-          height: "350px",
-          borderRadius: "50%",
-          border: "1px solid rgba(255,255,255,0.06)",
-          bottom: "-80px",
-          left: "-80px",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: "200px",
-          height: "200px",
-          borderRadius: "50%",
-          background: "rgba(242,0,0,0.15)",
-          top: "30%",
-          left: "10%",
-          pointerEvents: "none",
-          filter: "blur(40px)",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "4px",
+          background: "linear-gradient(90deg, #F20000 0%, #C20000 100%)",
         }}
       />
 
       <div
         style={{
           width: "100%",
-          maxWidth: "420px",
+          maxWidth: "400px",
           position: "relative",
           zIndex: 1,
         }}
       >
-        {/* Logo e título acima do card */}
-        <div style={{ textAlign: "center", marginBottom: "28px" }}>
+        {/* Logo Foco Institucional */}
+        <div style={{ textAlign: "center", marginBottom: "24px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/foco-logo-white.png"
+            src="/foco-logo.png"
             alt="Foco Aluguel de Carros"
             style={{
-              height: "52px",
-              margin: "0 auto 16px",
+              height: "46px",
+              margin: "0 auto 14px",
               display: "block",
-              filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))",
             }}
           />
           <h1
             style={{
-              color: "#fff",
-              fontSize: "22px",
-              fontWeight: 700,
-              margin: "0 0 6px",
-              letterSpacing: "-0.3px",
+              color: "#1C2024",
+              fontSize: "20px",
+              fontWeight: 800,
+              margin: "0 0 4px",
+              letterSpacing: "-0.4px",
             }}
           >
             Módulo de Pedágios
           </h1>
-          <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "13px", margin: 0 }}>
-            Acesso restrito para colaboradores autorizados
+          <p style={{ color: "#5F6B76", fontSize: "13px", margin: 0 }}>
+            Portal Seguro de Gestão e Cobrança
           </p>
         </div>
 
-        {/* Card de Login */}
+        {/* Card Branco Clean & Corporativo */}
         <div
           style={{
-            background: "#fff",
-            borderRadius: "16px",
-            overflow: "hidden",
-            boxShadow: "0 24px 60px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.2)",
+            background: "#FFFFFF",
+            borderRadius: "14px",
+            padding: "32px 28px",
+            boxShadow:
+              "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 25px -5px rgba(0, 0, 0, 0.08)",
+            border: "1px solid #E5E9EC",
           }}
         >
-          <div style={{ padding: "32px 28px" }}>
+          <div style={{ marginBottom: "22px" }}>
             <h2
               style={{
-                fontSize: "16px",
+                fontSize: "15px",
                 fontWeight: 700,
-                color: "#1a1a1a",
+                color: "#1C2024",
                 margin: "0 0 4px",
-                textAlign: "center",
               }}
             >
-              Identificação do Colaborador
+              Acessar sua conta
             </h2>
             <p
               style={{
                 fontSize: "12px",
-                color: "#6B7280",
-                margin: "0 0 24px",
-                textAlign: "center",
+                color: "#5F6B76",
+                margin: 0,
               }}
             >
-              Entre com suas credenciais corporativas
+              Insira suas credenciais corporativas
             </p>
-
-            {loginError && (
-              <div
-                style={{
-                  background: "#FEF2F2",
-                  border: "1px solid #FECACA",
-                  color: "#991B1B",
-                  borderRadius: "8px",
-                  padding: "12px 14px",
-                  marginBottom: "20px",
-                  fontSize: "13px",
-                }}
-              >
-                ⚠️ {loginError}
-              </div>
-            )}
-
-            <form onSubmit={handleLogin} style={{ display: "grid", gap: "18px" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#494949",
-                    marginBottom: "6px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  E-mail institucional
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu.email@focoalugueldecarros.com.br"
-                  required
-                  autoFocus
-                  style={{
-                    width: "100%",
-                    padding: "11px 14px",
-                    fontSize: "14px",
-                    border: "1.5px solid #E5E7EB",
-                    borderRadius: "8px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    color: "#1a1a1a",
-                    transition: "border-color 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#F20000";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#E5E7EB";
-                  }}
-                />
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#494949",
-                    marginBottom: "6px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  Senha de acesso
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "11px 14px",
-                    fontSize: "14px",
-                    border: "1.5px solid #E5E7EB",
-                    borderRadius: "8px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    color: "#1a1a1a",
-                    transition: "border-color 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#F20000";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#E5E7EB";
-                  }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loginLoading || !email || !password}
-                style={{
-                  width: "100%",
-                  padding: "13px",
-                  background:
-                    loginLoading || !email || !password
-                      ? "#ccc"
-                      : "linear-gradient(135deg, #F20000, #C20000)",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  cursor:
-                    loginLoading || !email || !password ? "not-allowed" : "pointer",
-                  letterSpacing: "0.3px",
-                  boxShadow: "0 4px 12px rgba(242,0,0,0.3)",
-                  transition: "all 0.2s",
-                  marginTop: "4px",
-                }}
-              >
-                {loginLoading ? "Autenticando..." : "Acessar Plataforma →"}
-              </button>
-            </form>
           </div>
 
-          {/* Rodapé informativo */}
+          {loginError && (
+            <div
+              style={{
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                color: "#991B1B",
+                borderRadius: "8px",
+                padding: "11px 13px",
+                marginBottom: "18px",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span>⚠️</span>
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} style={{ display: "grid", gap: "16px" }}>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#3B424A",
+                  marginBottom: "6px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                E-mail Corporativo
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nome.sobrenome@focoalugueldecarros.com.br"
+                required
+                autoFocus
+                style={{
+                  width: "100%",
+                  padding: "10px 13px",
+                  fontSize: "13px",
+                  border: "1.5px solid #E5E9EC",
+                  borderRadius: "8px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  color: "#1C2024",
+                  background: "#FAFBFB",
+                  transition: "all 0.15s ease",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#F20000";
+                  e.target.style.background = "#FFFFFF";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(242, 0, 0, 0.12)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#E5E9EC";
+                  e.target.style.boxShadow = "none";
+                }}
+              />
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#3B424A",
+                  marginBottom: "6px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Senha
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                style={{
+                  width: "100%",
+                  padding: "10px 13px",
+                  fontSize: "13px",
+                  border: "1.5px solid #E5E9EC",
+                  borderRadius: "8px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  color: "#1C2024",
+                  background: "#FAFBFB",
+                  transition: "all 0.15s ease",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#F20000";
+                  e.target.style.background = "#FFFFFF";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(242, 0, 0, 0.12)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#E5E9EC";
+                  e.target.style.boxShadow = "none";
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading || !email || !password}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                background:
+                  loginLoading || !email || !password
+                    ? "#CBD5E1"
+                    : "#F20000",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor:
+                  loginLoading || !email || !password ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+                marginTop: "4px",
+                boxShadow:
+                  loginLoading || !email || !password
+                    ? "none"
+                    : "0 2px 6px rgba(242, 0, 0, 0.25)",
+              }}
+              onMouseEnter={(e) => {
+                if (!loginLoading && email && password) {
+                  (e.target as HTMLElement).style.background = "#D90000";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loginLoading && email && password) {
+                  (e.target as HTMLElement).style.background = "#F20000";
+                }
+              }}
+            >
+              {loginLoading ? "Entrando..." : "Entrar na Plataforma"}
+            </button>
+          </form>
+
           <div
             style={{
-              padding: "14px 28px",
-              background: "#F9FAFB",
-              borderTop: "1px solid #F3F4F6",
+              marginTop: "24px",
+              paddingTop: "16px",
+              borderTop: "1px solid #EEF2F4",
               textAlign: "center",
               fontSize: "11px",
-              color: "#6B7280",
+              color: "#8B98A5",
             }}
           >
-            Novos acessos são criados exclusivamente pela gestão de administradores.
+            🔒 Gestão centralizada · Acessos criados por administradores Foco
           </div>
         </div>
       </div>
