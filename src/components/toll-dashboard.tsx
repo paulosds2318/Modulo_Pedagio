@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Lot = {
   id: number;
@@ -11,6 +11,7 @@ type Lot = {
   status: string;
   etapaRegua: string;
   dataCriacao: string;
+  dataPagamento?: string | null;
 };
 
 const money = (c: number) =>
@@ -23,6 +24,11 @@ export function TollDashboard() {
   const [lots, setLots] = useState<Lot[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Filtros rápidos da Visão Geral
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("TODOS");
+  const [dateFilter, setDateFilter] = useState("");
 
   useEffect(() => {
     Promise.all([fetch("/api/passagens/pendentes"), fetch("/api/lotes")])
@@ -46,6 +52,25 @@ export function TollDashboard() {
     .filter((lot) => lot.status !== "PAGO")
     .reduce((sum, lot) => sum + lot.valorFinalCentavos, 0);
 
+  // Filtragem rápida local dos lotes
+  const filteredLots = useMemo(() => {
+    return lots.filter((l) => {
+      const matchSearch =
+        !search.trim() ||
+        l.numeroContrato.toLowerCase().includes(search.toLowerCase()) ||
+        String(l.id).includes(search);
+
+      const matchStatus = statusFilter === "TODOS" || l.status === statusFilter;
+
+      const matchDate =
+        !dateFilter ||
+        l.dataCriacao.slice(0, 10) === dateFilter ||
+        (l.dataPagamento && l.dataPagamento.slice(0, 10) === dateFilter);
+
+      return matchSearch && matchStatus && matchDate;
+    });
+  }, [lots, search, statusFilter, dateFilter]);
+
   return (
     <main className="shell">
       <header className="page-heading">
@@ -55,7 +80,7 @@ export function TollDashboard() {
           </span>
           <h1>Visão Geral da Operação</h1>
           <p>
-            Monitoramento em tempo real de passagens ConectCar, compilação de lotes e execução da régua.
+            Monitoramento diário de passagens ConectCar, conciliação de pagamentos e esteira de cobrança.
           </p>
         </div>
         <Link className="button primary" href="/compilacao">
@@ -69,7 +94,7 @@ export function TollDashboard() {
         <article>
           <span>Passagens Pendentes</span>
           <strong>{loading ? "…" : passages}</strong>
-          <small>Disponíveis para formação de lote</small>
+          <small>Aguardando compilação de lote</small>
         </article>
 
         <article>
@@ -88,37 +113,100 @@ export function TollDashboard() {
       </section>
 
       <section className="panel">
-        <div className="panel-head">
+        <div className="panel-head" style={{ flexWrap: "wrap", gap: "16px" }}>
           <div>
-            <h2>Últimos Lotes Gerados</h2>
-            <p>Acesse o detalhe de cada lote para auditar a timeline e ações da régua.</p>
+            <h2>Lotes Gerados na Operação</h2>
+            <p>Filtragem rápida e acompanhamento diário com data de emissão e liquidação.</p>
           </div>
           <Link href="/lotes" className="button secondary">
-            Ver todos os lotes →
+            Ver todos com paginação completa →
           </Link>
         </div>
 
-        <div className="table-wrap">
+        {/* Barra de Filtros Rápidos na Visão Geral */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "12px",
+            padding: "16px 0 12px",
+            borderBottom: "1px solid var(--line)",
+            alignItems: "flex-end",
+          }}
+        >
+          <label className="search-field" style={{ minWidth: "180px" }}>
+            Buscar Contrato ou Lote
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Ex: LOC-2026, #1045..."
+            />
+          </label>
+
+          <label className="filter-field">
+            Status
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="TODOS">Todos os status</option>
+              <option value="PAGO">Pago / Liquidado</option>
+              <option value="EM_REGUA">Em régua ativa</option>
+              <option value="INADIMPLENTE">Inadimplente</option>
+            </select>
+          </label>
+
+          <label className="filter-field">
+            Data Específica
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+            />
+          </label>
+
+          {(search || statusFilter !== "TODOS" || dateFilter) && (
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("TODOS");
+                  setDateFilter("");
+                }}
+                style={{ fontSize: "12px", padding: "8px 12px", height: "40px" }}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="table-wrap" style={{ marginTop: "12px" }}>
           <table>
             <thead>
               <tr>
                 <th>Lote</th>
                 <th>Contrato</th>
+                <th>Data de Emissão</th>
                 <th>Qtd. Passagens</th>
                 <th>Valor Total</th>
                 <th>Etapa Régua</th>
                 <th>Status</th>
-                <th>Ação</th>
+                <th>Data do Pagamento</th>
+                <th style={{ textAlign: "right" }}>Ação</th>
               </tr>
             </thead>
             <tbody>
-              {lots.slice(0, 8).length ? (
-                lots.slice(0, 8).map((l) => (
+              {filteredLots.length ? (
+                filteredLots.slice(0, 10).map((l) => (
                   <tr key={l.id}>
                     <td className="strong">#{l.id}</td>
                     <td>
                       <span className="strong">{l.numeroContrato}</span>
                     </td>
+                    <td>{new Date(l.dataCriacao).toLocaleDateString("pt-BR")}</td>
                     <td>{l.quantidadePassagens} pedágio(s)</td>
                     <td className="strong">{money(l.valorFinalCentavos)}</td>
                     <td>
@@ -128,10 +216,23 @@ export function TollDashboard() {
                     </td>
                     <td>
                       <span className={`status status-${l.status.toLowerCase()}`}>
-                        {l.status.replaceAll("_", " ")}
+                        {l.status === "PAGO" ? "✓ PAGO" : l.status.replaceAll("_", " ")}
                       </span>
                     </td>
                     <td>
+                      {l.dataPagamento ? (
+                        <span style={{ color: "var(--foco-green)", fontWeight: 600 }}>
+                          {new Date(l.dataPagamento).toLocaleDateString("pt-BR")} às{" "}
+                          {new Date(l.dataPagamento).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--muted)" }}>Aguardando</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
                       <Link href={`/lotes/${l.id}`} style={{ fontWeight: 700 }}>
                         Ver detalhes →
                       </Link>
@@ -140,8 +241,10 @@ export function TollDashboard() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="empty">
-                    {loading ? "Carregando lotes..." : "Nenhum lote compilado até o momento."}
+                  <td colSpan={9} className="empty" style={{ padding: "32px", textAlign: "center" }}>
+                    {loading
+                      ? "Carregando lotes..."
+                      : "Nenhum lote corresponde aos filtros aplicados."}
                   </td>
                 </tr>
               )}
