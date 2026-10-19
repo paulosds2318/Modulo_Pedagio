@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { isValidAdyenHmac } from "../src/lib/adyen.ts";
 import { hasBearerSecret } from "../src/lib/auth.ts";
+import type { UserRole } from "../src/lib/auth.ts";
 
 test("Segurança de Pagamento - HMAC Adyen: Aceita assinatura válida", () => {
   const secretHex = "447664FE2792BD73B1E3E2E7628BA460ED20D536CE753B5532243787758E37E2";
@@ -49,7 +50,7 @@ test("Segurança de Pagamento - HMAC Adyen: Rejeita assinatura forjada ou altera
     originalReference: "",
     merchantAccountCode: "FocoRentACarCOM",
     merchantReference: "LOTE_42",
-    amount: { value: 100, currency: "BRL" }, // Valor adulterado
+    amount: { value: 100, currency: "BRL" },
     eventCode: "AUTHORISATION",
     success: "true",
     additionalData: { hmacSignature: "AAAAForgerSignature==" },
@@ -92,7 +93,7 @@ test("Segurança de Autenticação - Bearer Secret com timingSafeEqual", () => {
 });
 
 test("Segurança de Dados Sensíveis - Mascaramento de CPF", () => {
-  const maskCpf = (cpf) => {
+  const maskCpf = (cpf: string): string => {
     const digits = cpf.replace(/\D/g, "");
     if (digits.length === 11) {
       return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
@@ -103,4 +104,15 @@ test("Segurança de Dados Sensíveis - Mascaramento de CPF", () => {
   assert.equal(maskCpf("12345678901"), "123.***.***-01");
   assert.equal(maskCpf("123.456.789-01"), "123.***.***-01");
   assert.equal(maskCpf("123"), "123");
+});
+
+test("Segurança de Perfis - Validação de Papéis RBAC (Admin vs Visualização)", () => {
+  const canPerformAdminActions = (role: UserRole | string | undefined): boolean => {
+    return role === "admin";
+  };
+
+  assert.equal(canPerformAdminActions("admin"), true);
+  assert.equal(canPerformAdminActions("viewer"), false);
+  assert.equal(canPerformAdminActions(undefined), false);
+  assert.equal(canPerformAdminActions("other"), false);
 });

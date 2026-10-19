@@ -8,22 +8,22 @@ datasource db {
 }
 
 model ContratoLocacao {
-  id             Int      @id @default(autoincrement())
-  numeroContrato String   @unique
-  cpfCliente     String
+  id              Int      @id @default(autoincrement())
+  numeroContrato  String   @unique
+  cpfCliente      String
   telefoneCliente String?
-  placa          String
-  dataRetirada   DateTime
-  dataDevolucao  DateTime
-  lojaRetirada   String
+  placa           String
+  dataRetirada    DateTime
+  dataDevolucao   DateTime
+  lojaRetirada    String
 
   @@index([placa, dataRetirada, dataDevolucao])
   @@map("contratos_locacao")
 }
 
 model PassagemPedagio {
-  id              Int          @id @default(autoincrement())
-  idConectcar     String       @unique
+  id              Int           @id @default(autoincrement())
+  idConectcar     String        @unique
   numeroContrato  String
   cpfCliente      String
   telefoneCliente String?
@@ -43,20 +43,20 @@ model PassagemPedagio {
 }
 
 model LoteCobranca {
-  id                  Int             @id @default(autoincrement())
+  id                  Int               @id @default(autoincrement())
   numeroContrato      String
   cpfCliente          String
   telefoneCliente     String?
   quantidadePassagens Int
   valorTotalCentavos  Int
-  taxaCentavos        Int             @default(0)
+  taxaCentavos        Int               @default(0)
   valorFinalCentavos  Int
-  status              String          @default("PENDENTE")
+  status              String            @default("PENDENTE")
   adyenLinkId         String?
   adyenPaymentUrl     String?
   adyenPspReference   String?
-  etapaRegua          String          @default("D0")
-  dataCriacao         DateTime        @default(now())
+  etapaRegua          String            @default("D0")
+  dataCriacao         DateTime          @default(now())
   dataPagamento       DateTime?
   d5TentativaAt       DateTime?
   d7LembreteAt        DateTime?
@@ -86,3 +86,144 @@ model LogRegua {
   @@index([providerMessageId])
   @@map("logs_regua")
 }
+
+// =========================================================================
+// Better Auth - Autenticação & Perfis (Admin e Visualização)
+// =========================================================================
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Plugin Admin / RBAC: perfis "admin" ou "viewer" (visualizacao)
+  role          String?   @default("viewer")
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
+
+  sessions      Session[]
+  accounts      Account[]
+
+  @@map("users")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verifications")
+}
+
+// =========================================================================
+// Better Auth - Autenticação & Perfis (Admin e Visualização)
+// =========================================================================
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Plugin Admin / RBAC: perfis "admin" ou "viewer" (visualizacao)
+  role          String?   @default("viewer")
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
+
+  sessions      Session[]
+  accounts      Account[]
+
+  @@map("users")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verifications")
+}
+

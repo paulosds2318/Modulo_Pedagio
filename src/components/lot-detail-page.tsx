@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "@/lib/auth-client";
 
 type Entry = {
   id: number;
@@ -61,6 +62,10 @@ const stages = [
 
 export function LotDetailPage() {
   const params = useParams<{ id: string }>();
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
+  const isViewer = Boolean(session?.user && role === "viewer");
+
   const [lot, setLot] = useState<Lot | null>(null);
   const [error, setError] = useState("");
   const [opsToken, setOpsToken] = useState("");
@@ -281,6 +286,20 @@ export function LotDetailPage() {
           </div>
         </div>
 
+        {isViewer && (
+          <div
+            className="selection-summary"
+            style={{
+              background: "#F3F4F6",
+              borderColor: "var(--line)",
+              color: "var(--ink-secondary)",
+              marginBottom: "16px",
+            }}
+          >
+            👁️ <strong>Perfil de Visualização:</strong> Você possui acesso em modo somente leitura. A baixa manual e o encerramento administrativo são restritos ao perfil <strong>Administrador</strong>.
+          </div>
+        )}
+
         <p className="muted" style={{ marginBottom: "12px", fontSize: "12px" }}>
           Esta ação exige o token operacional configurado em <code>OPERATIONS_API_TOKEN</code> e justificativa obrigatória registrada em auditoria.
         </p>
@@ -292,23 +311,27 @@ export function LotDetailPage() {
             onChange={(e) => setOpsToken(e.target.value)}
             placeholder="Token operacional de autorização"
             autoComplete="off"
+            disabled={isViewer}
           />
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Justificativa da baixa manual (mínimo 3 caracteres)"
             maxLength={500}
+            disabled={isViewer}
           />
           <button
             className="button primary"
-            disabled={busy || !opsToken || note.trim().length < 3 || lot.status === "PAGO"}
+            disabled={isViewer || busy || !opsToken || note.trim().length < 3 || lot.status === "PAGO"}
+            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void settle("PAGO")}
           >
             {busy ? "Processando…" : "Registrar como Pago"}
           </button>
           <button
             className="button secondary"
-            disabled={busy || !opsToken || note.trim().length < 3 || lot.status === "INADIMPLENTE"}
+            disabled={isViewer || busy || !opsToken || note.trim().length < 3 || lot.status === "INADIMPLENTE"}
+            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void settle("INADIMPLENTE")}
           >
             {busy ? "Processando…" : "Encerrar como Inadimplente"}

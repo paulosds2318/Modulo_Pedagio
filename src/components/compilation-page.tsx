@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "@/lib/auth-client";
 
 type Passage = {
   id: number;
@@ -21,6 +22,10 @@ const money = (c: number) =>
   );
 
 export function CompilationPage() {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
+  const isViewer = Boolean(session?.user && role === "viewer");
+
   const [all, setAll] = useState<Passage[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [query, setQuery] = useState("");
@@ -160,6 +165,20 @@ export function CompilationPage() {
         </div>
       )}
 
+      {isViewer && (
+        <div
+          className="selection-summary"
+          style={{
+            background: "#F3F4F6",
+            borderColor: "var(--line)",
+            color: "var(--ink-secondary)",
+            marginBottom: "20px",
+          }}
+        >
+          👁️ <strong>Perfil de Visualização:</strong> Você possui acesso em modo somente leitura. A compilação de lotes e a sincronização com a ConectCar são restritas ao perfil <strong>Administrador</strong>.
+        </div>
+      )}
+
       <section className="panel sync-panel">
         <div>
           <h2>Sincronização ConectCar</h2>
@@ -174,10 +193,12 @@ export function CompilationPage() {
             onChange={(e) => setSyncToken(e.target.value)}
             placeholder="Token da API ConectCar"
             autoComplete="off"
+            disabled={isViewer}
           />
           <button
             className="button secondary"
-            disabled={!syncToken || syncing}
+            disabled={!syncToken || syncing || isViewer}
+            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void syncConectCar()}
           >
             {syncing ? "Sincronizando…" : "Sincronizar agora"}
@@ -221,10 +242,11 @@ export function CompilationPage() {
           </label>
           <button
             className="button primary"
-            disabled={!selected.length || contracts.size !== 1 || busy}
+            disabled={!selected.length || contracts.size !== 1 || busy || isViewer}
+            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void compile()}
           >
-            {busy ? "Compilando…" : `Compilar lote (${selected.length})`}
+            {busy ? "Compilando…" : isViewer ? "Apenas Administrador pode compilar" : `Compilar lote (${selected.length})`}
           </button>
         </div>
 

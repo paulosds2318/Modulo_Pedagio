@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { expirePaymentLink } from "@/lib/adyen";
+import { getServerSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,15 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
+  // Guarda de Sessão: Perfil de visualização não pode realizar baixa manual
+  const session = await getServerSession();
+  if (session && (session.user as { role?: string })?.role === "viewer") {
+    return NextResponse.json(
+      { error: "Acesso negado: Perfil de visualização não possui permissão para realizar baixa manual." },
+      { status: 403 }
+    );
+  }
+
   if (!validOpsToken(request)) {
     return NextResponse.json(
       {

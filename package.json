@@ -2,19 +2,22 @@
   "name": "toll-manager-app",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test test/security.test.mjs",
+    "test": "node --experimental-strip-types --test test/security.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",
-    "seed:dev": "node prisma/seed.cjs"
+    "seed:dev": "node --experimental-strip-types prisma/seed.ts"
   },
   "dependencies": {
+    "@better-auth/prisma-adapter": "^1.7.11",
     "@prisma/client": "6.19.1",
+    "better-auth": "^1.7.11",
     "next": "16.4.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
