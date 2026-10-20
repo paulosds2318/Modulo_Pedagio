@@ -6,7 +6,7 @@ import { hasBearerSecret } from "@/lib/auth";
 export const runtime = "nodejs";
 
 const passageSchema = z.object({
-  idOrigem: z.string().trim().min(1).max(100),
+  idCoral: z.string().trim().min(1).max(100),
   numeroContrato: z.string().trim().min(1).max(50),
   cpfCliente: z.string().trim().min(1).max(14),
   telefoneCliente: z.string().trim().max(30).optional().nullable(),
@@ -22,10 +22,10 @@ const passageSchema = z.object({
 const importSchema = z.array(passageSchema).min(1).max(500);
 
 export async function POST(request: Request) {
-  const importSecret = process.env.PASSAGES_IMPORT_SECRET;
+  const importSecret = process.env.CORAL_PASSAGES_SYNC_SECRET;
   if (!hasBearerSecret(request, importSecret)) {
     return NextResponse.json(
-      { error: "Nao autorizado ou importacao de passagens nao configurada." },
+      { error: "Nao autorizado ou integracao de passagens do Coral nao configurada." },
       { status: importSecret ? 401 : 503 }
     );
   }
@@ -46,17 +46,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await db.$transaction(
-      parsed.data.map((passage) =>
-        db.passagemPedagio.upsert({
-          where: { idOrigem: passage.idOrigem },
-          create: passage,
-          update: passage,
-        })
-      )
-    );
-    return NextResponse.json({ importadas: result.length });
+    const result = await db.passagemPedagio.createMany({
+      data: parsed.data,
+      skipDuplicates: true,
+    });
+    return NextResponse.json({
+      importadas: result.count,
+      duplicadas: parsed.data.length - result.count,
+    });
   } catch {
-    return NextResponse.json({ error: "Falha ao importar passagens." }, { status: 503 });
+    return NextResponse.json({ error: "Falha ao importar passagens do Coral." }, { status: 503 });
   }
 }

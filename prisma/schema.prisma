@@ -23,7 +23,7 @@ model ContratoLocacao {
 
 model PassagemPedagio {
   id              Int           @id @default(autoincrement())
-  idOrigem        String        @unique
+  idCoral          String        @unique
   numeroContrato  String
   cpfCliente      String
   telefoneCliente String?

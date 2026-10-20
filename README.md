@@ -45,7 +45,7 @@ O Docker Compose serve para desenvolvimento e validação do container. O deploy
 
 
 - `POST /api/locacoes/sincronizar`: recebe `[{numeroContrato, cpfCliente, telefoneCliente?, placa, dataRetirada, dataDevolucao, lojaRetirada}]` do Coral; autenticação `Bearer CORAL_RENTALS_SYNC_SECRET`.
-- `POST /api/passagens`: importa de 1 a 500 passagens no formato `{idOrigem, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer PASSAGES_IMPORT_SECRET`. O aplicativo nao consulta APIs de fornecedores de passagens; a origem escolhida pela operacao deve enviar os dados para esse endpoint.
+- `POST /api/passagens`: recebe do Coral de 1 a 500 passagens no formato `{idCoral, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer CORAL_PASSAGES_SYNC_SECRET`. `idCoral` é único; reenvios são ignorados sem sobrescrever a passagem já importada. `valorCentavos` deve ser inteiro em centavos.
 - `POST /api/lotes/compilar`: cria o lote, tenta criar Pay-by-link Adyen e envia a notificação inicial pelo gateway WhatsApp.
 - `GET` ou `POST /api/cron/regua`: executar diariamente com `Authorization: Bearer CRON_SECRET`. Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.
@@ -56,6 +56,8 @@ O Docker Compose serve para desenvolvimento e validação do container. O deploy
 O gateway WhatsApp espera `POST {to,text,reference}` e pode retornar `{messageId}`. O endpoint Coral para token espera `POST {numeroContrato,cpfCliente}` e responde `{storedPaymentMethodId}`. Ajuste esses adaptadores ao contrato autenticado real. PAN e CVV não são armazenados.
 
 ## Configuração
+
+Consulte [o guia das variáveis de ambiente](docs/variaveis-de-ambiente.md) (tambem em [PDF](docs/variaveis-de-ambiente.pdf)) para saber o que configurar no .env.
 
 Preencha `.env` local com as URLs, tokens e chaves. Nunca publique credenciais. A integração de cartão tokenizado depende de autorização, consentimento e disponibilidade do token no Coral. O cron deve ser invocado por um scheduler persistente; acessar a página não executa a régua.
 

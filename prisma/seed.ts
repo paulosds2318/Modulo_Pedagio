@@ -108,9 +108,9 @@ async function main() {
     ["DEMO-TOLL-002", "Anhanguera", 875],
   ] as const) {
     await db.passagemPedagio.upsert({
-      where: { idOrigem: id },
+      where: { idCoral: id },
       create: {
-        idOrigem: id,
+        idCoral: id,
         numeroContrato: "DEMO-2026-001",
         cpfCliente: "00000000000",
         telefoneCliente: "5511999999999",

@@ -1,0 +1,166 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 4200 >>
+stream
+BT
+/F2 14 Tf 48 800 Td (Variáveis de ambiente) Tj 0 -18 Td
+/F1 8.5 Tf 48 775 Td (Este guia explica as variáveis do Toll Manager e quando configurá-las. Valores secretos devem ficar) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 762.5 Td (  no arquivo local .env ou no gerenciador de secrets da plataforma. Não compartilhe esses valores) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 750.0 Td (  nem faça commit do .env.) Tj 0 -12.5 Td
+/F2 14 Tf 48 730.5 Td (Autenticação e aplicação) Tj 0 -18 Td
+/F1 8.5 Tf 48 705.5 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 693.0 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 680.5 Td (   BETTER_AUTH_SECRET   •   Chave privada usada pelo Better Auth para assinar e proteger sessões.  ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 668.0 Td (  •   Obrigatória. O Docker Compose não inicia o app sem ela. Use um valor aleatório forte. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 655.5 Td (   BETTER_AUTH_URL   •   URL base pública usada pelo Better Auth, como) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 643.0 Td (  https://pedagios.empresa.com.   •   Opcional localmente; configure em produção com a URL pública) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 630.5 Td (  e HTTPS. Padrão local: http://localhost:3000. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 618.0 Td (   FRAME_ANCESTORS   •   Origens autorizadas a exibir o app em iframe, pela política CSP) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 605.5 Td (  frame-ancestors.   •   Opcional; padrão 'self'. Acrescente somente domínios confiáveis. No) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 593.0 Td (  Docker, alterar exige reconstruir a imagem. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 580.5 Td (   NODE_ENV   •   Modo de execução do Node.js.   •   O Compose define production no container;) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 568.0 Td (  normalmente não precisa entrar no .env. ) Tj 0 -12.5 Td
+/F2 14 Tf 48 548.5 Td (Banco de dados) Tj 0 -18 Td
+/F1 8.5 Tf 48 523.5 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 511.0 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 498.5 Td (   DATABASE_URL   •   Conexão do Prisma com PostgreSQL.   •   Para executar o app diretamente no) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 486.0 Td (  computador; o exemplo usa localhost:5432. No Compose, o app conecta ao host interno db:5432) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 473.5 Td (  usando POSTGRES_*; o DATABASE_URL do .env é ignorado pelo serviço app. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 461.0 Td (   POSTGRES_DB   •   Nome do banco criado pelo container.   •   Opcional; padrão toll_manager. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 448.5 Td (   POSTGRES_USER   •   Usuário criado para o banco.   •   Opcional; padrão toll_manager. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 436.0 Td (   POSTGRES_PASSWORD   •   Senha desse usuário.   •   Troque o padrão de desenvolvimento por uma) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 423.5 Td (  senha forte fora do ambiente local. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 411.0 Td (   DB_PORT   •   Porta do computador encaminhada à porta 5432 do PostgreSQL no container.   •  ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 398.5 Td (  Opcional; padrão 5432. O app continua usando db:5432 dentro do Compose. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 379.0 Td (O banco usa volume persistente. Alterar POSTGRES_DB, POSTGRES_USER ou POSTGRES_PASSWORD no .env não) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 366.5 Td (  altera automaticamente um banco que já foi inicializado no volume.) Tj 0 -12.5 Td
+/F2 14 Tf 48 347.0 Td (Importação de dados) Tj 0 -18 Td
+/F1 8.5 Tf 48 322.0 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 309.5 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 297.0 Td (   CORAL_PASSAGES_SYNC_SECRET   •   Segredo Bearer que autoriza uma origem a enviar passagens para) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 284.5 Td (  POST /api/passagens.   •   Configure no Coral e no app. O Coral envia as passagens para POST) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 272.0 Td (  /api/passagens usando Authorization: Bearer. Sem ele, a rota retorna 503. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 259.5 Td (   CORAL_RENTALS_SYNC_SECRET   •   Segredo Bearer para o Coral enviar os contratos de locação para) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 247.0 Td (  POST /api/locacoes/sincronizar.   •   Necessário se essa integração for usada. ) Tj 0 -12.5 Td
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 4107 >>
+stream
+BT
+/F1 8.5 Tf 48 800 Td (A integração recebe do Coral de 1 a 500 passagens por chamada. Cada registro deve conter idCoral) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 787.5 Td (  \(identificador único da passagem no Coral\), numeroContrato, cpfCliente, placa, tag, praca,) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 775.0 Td (  rodovia, dataHora, valorCentavos e lojaRetirada. telefoneCliente é opcional. Envie dataHora em) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 762.5 Td (  formato ISO 8601 e valorCentavos como inteiro em centavos \(por exemplo, R$ 12,34 = 1234\). O banco) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 750.0 Td (  possui uma restrição única para idCoral: reenvios são ignorados e contabilizados como duplicados,) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 737.5 Td (  sem atualizar a passagem já recebida.) Tj 0 -12.5 Td
+/F2 14 Tf 48 718.0 Td (Adyen) Tj 0 -18 Td
+/F1 8.5 Tf 48 693.0 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 680.5 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 668.0 Td (   ADYEN_API_KEY   •   Credencial usada para criar links de pagamento e realizar cobranças.   •  ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 655.5 Td (  Configure com a chave da Adyen. Vazia, desabilita as operações de pagamento Adyen. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 643.0 Td (   ADYEN_MERCHANT_ACCOUNT   •   Conta de comerciante usada nas operações e validada nas) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 630.5 Td (  notificações.   •   Necessária junto com ADYEN_API_KEY. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 618.0 Td (   ADYEN_ENVIRONMENT   •   Ambiente da API: test ou live.   •   Padrão test. Somente live seleciona) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 605.5 Td (  produção. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 593.0 Td (   ADYEN_API_VERSION   •   Versão do endpoint Checkout API.   •   Opcional; padrão v71. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 580.5 Td (   ADYEN_LIVE_PREFIX   •   Prefixo de região/endpoint da conta Live Adyen.   •   Obrigatório quando) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 568.0 Td (  ADYEN_ENVIRONMENT=live. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 555.5 Td (   ADYEN_HMAC_KEY   •   Chave HMAC que valida a assinatura dos webhooks de pagamento.   •  ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 543.0 Td (  Configure no app e no webhook da Adyen; notificações sem assinatura válida são rejeitadas. ) Tj 0 -12.5 Td
+/F2 14 Tf 48 523.5 Td (Coral) Tj 0 -18 Td
+/F1 8.5 Tf 48 498.5 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 486.0 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 473.5 Td (   CORAL_API_TOKEN   •   Bearer enviado ao Coral para consultar o cartão tokenizado do contrato e) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 461.0 Td (  CPF.   •   Necessário para consultar cartão tokenizado. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 448.5 Td (   CORAL_TOKEN_LOOKUP_URL   •   Endpoint Coral que recebe numeroContrato e cpfCliente e retorna) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 436.0 Td (  storedPaymentMethodId.   •   Necessário junto com CORAL_API_TOKEN para tentativas de cobrança no) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 423.5 Td (  cartão. ) Tj 0 -12.5 Td
+/F2 14 Tf 48 404.0 Td (WhatsApp) Tj 0 -18 Td
+/F1 8.5 Tf 48 379.0 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 366.5 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 354.0 Td (   WHATSAPP_API_URL   •   URL do gateway de envio. O app envia to, text e reference.   •  ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 341.5 Td (  Configure para habilitar os envios. Sem URL, mensagens não são enviadas pelo gateway. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 329.0 Td (   WHATSAPP_API_TOKEN   •   Bearer enviado ao gateway de saída.   •   Use se o gateway exigir) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 316.5 Td (  autenticação. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 304.0 Td (   WHATSAPP_WEBHOOK_TOKEN   •   Segredo Bearer para autenticar retornos de entrega em POST) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 291.5 Td (  /api/webhooks/whatsapp.   •   Configure no provedor e no app se receber status por webhook. ) Tj 0 -12.5 Td
+/F2 14 Tf 48 272.0 Td (Rotina automática) Tj 0 -18 Td
+/F1 8.5 Tf 48 247.0 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 234.5 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 2402 >>
+stream
+BT
+/F1 8.5 Tf 48 800 Td (   CRON_SECRET   •   Bearer que protege GET/POST /api/cron/regua, a rotina automática de cobrança. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 787.5 Td (  •   Configure quando um agendador externo chamar a rota. Envie como Authorization: Bearer) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 775.0 Td (  <segredo>. ) Tj 0 -12.5 Td
+/F2 14 Tf 48 755.5 Td (Seed de desenvolvimento) Tj 0 -18 Td
+/F1 8.5 Tf 48 730.5 Td (   Variável   •   O que configura   •   Quando usar ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 718.0 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 705.5 Td (   SEED_ADMIN_PASSWORD   •   Senha inicial do usuário administrador criado pelo seed.   •   Somente) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 693.0 Td (  para npm run seed:dev; mínimo de 12 caracteres. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 680.5 Td (   SEED_VIEWER_PASSWORD   •   Senha inicial do usuário viewer criado pelo seed.   •   Somente para) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 668.0 Td (  npm run seed:dev; mínimo de 12 caracteres. ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 648.5 Td (As senhas de seed não criam usuários automaticamente em produção.) Tj 0 -12.5 Td
+/F2 14 Tf 48 629.0 Td (Portas do Compose) Tj 0 -18 Td
+/F1 8.5 Tf 48 604.0 Td (   Variável   •   O que configura   •   Padrão ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 591.5 Td (  ---  •  ---  •  ---) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 579.0 Td (   PORT   •   Porta do computador exposta para acessar o app. O container continua escutando na) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 566.5 Td (  porta 3000.   •   3000 ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 554.0 Td (   DB_PORT   •   Porta do computador exposta para acessar o PostgreSQL.   •   5432 ) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 534.5 Td (Por exemplo, PORT=3100 disponibiliza o app em http://localhost:3100. Em produção, ajuste também) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 522.0 Td (  BETTER_AUTH_URL para a URL pública.) Tj 0 -12.5 Td
+/F2 14 Tf 48 502.5 Td (Gerar segredos) Tj 0 -18 Td
+/F1 8.5 Tf 48 477.5 Td (No PowerShell, gere um valor aleatório com:) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 458.0 Td (powershell) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 445.5 Td (node -e "console.log\(require\('node:crypto'\).randomBytes\(48\).toString\('base64'\)\)") Tj 0 -12.5 Td
+/F1 8.5 Tf 48 419.0 Td (Use valores diferentes para BETTER_AUTH_SECRET, CORAL_PASSAGES_SYNC_SECRET, CRON_SECRET e tokens de) Tj 0 -12.5 Td
+/F1 8.5 Tf 48 406.5 Td (  webhook. Guarde-os no .env local ou no gerenciador de secrets da plataforma.) Tj 0 -12.5 Td
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 9 0 R >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000134 00000 n 
+0000000231 00000 n 
+0000000333 00000 n 
+0000004585 00000 n 
+0000004721 00000 n 
+0000008880 00000 n 
+0000009016 00000 n 
+0000011470 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+11607
+%%EOF
