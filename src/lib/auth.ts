@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { admin } from "better-auth/plugins";
+import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { db } from "./db.ts";
 import { timingSafeEqual } from "node:crypto";
 
@@ -13,7 +14,11 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
   },
-  plugins: [admin({ defaultRole: "viewer", adminRoles: ["admin", "master"] })],
+  plugins: [admin({
+    defaultRole: "viewer",
+    adminRoles: ["admin", "master"],
+    roles: { admin: adminAc, master: adminAc, viewer: userAc, user: userAc },
+  })],
 });
 
 export type UserRole = "master" | "admin" | "viewer";
