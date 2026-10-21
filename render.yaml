@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: toll-manager-app
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    initialDeployHook: npm run seed:dev
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: toll-manager-db
+          property: connectionString
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: BETTER_AUTH_URL
+        fromService:
+          type: web
+          name: toll-manager-app
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NODE_ENV
+        value: production
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_VIEWER_PASSWORD
+        sync: false
+
+databases:
+  - name: toll-manager-db
+    databaseName: toll_manager
+    user: toll_manager
+    plan: free
+    postgresMajorVersion: "16"
