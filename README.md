@@ -32,7 +32,7 @@ O projeto gera uma build standalone do Next.js e inclui `Dockerfile` e `docker-c
 
 Configure as variáveis de integração do `.env.example` como secrets da plataforma. Use HTTPS, senhas fortes, backups e um serviço de cron externo chamando `GET /api/cron/regua` diariamente com `Authorization: Bearer CRON_SECRET`. Configure `FRAME_ANCESTORS` com os domínios do Coral autorizados a embutir a aplicação, por exemplo: `'self' https://coral.suaempresa.com`. A política de iframe é incorporada durante o build; defina essa variável também no ambiente de build e faça novo deploy quando mudar os domínios. É uma lista de origens CSP, mantendo as aspas simples em torno de `'self'`.
 
-O Docker Compose serve para desenvolvimento e validação do container. Para o deploy de demonstração no Render, consulte [o guia de publicação](docs/publicar-no-render.md). Se o serviço estiver conectado pela URL pública do repositório, após enviar commits à branch main inicie o deploy pelo painel do Render.
+O Docker Compose serve para desenvolvimento e validação do container. Para o deploy de demonstração no Render, consulte [o guia de publicação](docs/publicar-no-render.md). Se o serviço estiver conectado pela URL pública do repositório, após enviar commits à branch main inicie o deploy pelo painel do Render. Acesse a aplicação publicada: [Toll Manager App](https://toll-manager-app.onrender.com).
 
 ## Páginas
 
