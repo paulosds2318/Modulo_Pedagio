@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { createPaymentLink } from "@/lib/adyen";
-import { buildPaymentMessage, sendWhatsAppMessage } from "@/lib/services/whatsapp";
 import { getServerSession, hasRole } from "@/lib/auth";
+import { processIntegrationOutbox } from "@/lib/services/outbox";
 
 export const runtime = "nodejs";
 
@@ -90,6 +89,10 @@ export async function POST(request: Request) {
         },
       });
 
+      await tx.integrationOutbox.createMany({
+        data: [{ loteId: newLot.id, tipo: "ADYEN_LINK_D0" }, { loteId: newLot.id, tipo: "WHATSAPP_D0" }],
+      });
+
       // Vinculação Atômica com Validação de Concorrência
       const linked = await tx.passagemPedagio.updateMany({
         where: {
@@ -106,80 +109,10 @@ export async function POST(request: Request) {
       return newLot;
     });
 
-    // 2. Emissão do Link de Pagamento na Adyen (Pay-by-Link)
-    let link: { id?: string; url?: string } | null = null;
-    let adyenResult = "PENDENTE_CONFIGURACAO";
-    let adyenDetails = "Credenciais Adyen não configuradas no ambiente.";
-
-    try {
-      link = await createPaymentLink(lot.id, lot.valorFinalCentavos, lot.numeroContrato);
-      if (link?.url) {
-        adyenResult = "SUCESSO";
-        adyenDetails = `Pay-by-link emitido na Adyen (ID: ${link.id}).`;
-      }
-    } catch (error) {
-      adyenResult = "FALHA";
-      adyenDetails = error instanceof Error ? error.message : "Falha na API Adyen.";
-    }
-
-    // 3. Disparo da Notificação D+0 via WhatsApp
-    let whatsappResult = "NAO_CONFIGURADO";
-    let whatsappDetails = "Telefone do cliente ou gateway WhatsApp não configurado.";
-    let messageId: string | undefined;
-
-    if (lot.telefoneCliente && process.env.WHATSAPP_API_URL) {
-      try {
-        const sent = await sendWhatsAppMessage(
-          lot.telefoneCliente,
-          buildPaymentMessage(lot.numeroContrato, lot.valorFinalCentavos, link?.url),
-          `LOTE_${lot.id}_D0`
-        );
-        if (sent) {
-          whatsappResult = "ENVIADO";
-          whatsappDetails = `Mensagem de cobrança D+0 enviada para ${lot.telefoneCliente}.`;
-          messageId = sent.messageId;
-        }
-      } catch (error) {
-        whatsappResult = "FALHA";
-        whatsappDetails = error instanceof Error ? error.message : "Falha no gateway WhatsApp.";
-      }
-    }
-
-    // 4. Registro dos Logs Auditáveis de Emissão e Atualização dos Links
-    const updated = await db.$transaction(async (tx) => {
-      const saved = await tx.loteCobranca.update({
-        where: { id: lot.id },
-        data: {
-          adyenLinkId: link?.id,
-          adyenPaymentUrl: link?.url,
-        },
-      });
-
-      await tx.logRegua.createMany({
-        data: [
-          {
-            loteId: lot.id,
-            etapa: "D0",
-            acao: "CRIAR_PAY_BY_LINK",
-            canal: "Adyen",
-            resultado: adyenResult,
-            detalhesResposta: adyenDetails,
-          },
-          {
-            loteId: lot.id,
-            etapa: "D0",
-            acao: "NOTIFICAR_CLIENTE",
-            canal: "WhatsApp",
-            resultado: whatsappResult,
-            detalhesResposta: whatsappDetails,
-            providerMessageId: messageId,
-          },
-        ],
-      });
-
-      return saved;
-    });
-
+    // A outbox persistente preserva os envios se a aplicação cair ou o provedor estiver fora.
+    try { await processIntegrationOutbox(new Date(), lot.id); }
+    catch { /* As tarefas persistentes serão retomadas pelo cron. */ }
+    const updated = await db.loteCobranca.findUniqueOrThrow({ where: { id: lot.id } });
     return NextResponse.json(updated, { status: 201 });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";

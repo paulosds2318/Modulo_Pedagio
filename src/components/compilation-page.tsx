@@ -35,6 +35,9 @@ export function CompilationPage() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [refreshError, setRefreshError] = useState("");
 
   useEffect(() => {
     fetch("/api/passagens/pendentes")
@@ -74,6 +77,34 @@ export function CompilationPage() {
   const feeCentavos = Math.round((Number(fee.replace(",", ".")) || 0) * 100);
   const finalTotal = total + feeCentavos;
 
+  async function refreshPassages() {
+    setRefreshing(true);
+    setRefreshNotice("Atualizando passagens pendentes...");
+    setRefreshError("");
+    try {
+      const response = await fetch("/api/passagens/pendentes");
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.error || "N\u00e3o foi poss\u00edvel atualizar as passagens.");
+      }
+      if (!Array.isArray(result)) throw new Error("O servidor retornou uma resposta inv\u00e1lida para as passagens pendentes.");
+
+      const nextPassages: Passage[] = result;
+      const hasChanges = JSON.stringify(all) !== JSON.stringify(nextPassages);
+      const availableIds = new Set(nextPassages.map((passage) => passage.id));
+      setAll(nextPassages);
+      setSelected((current) => current.filter((id) => availableIds.has(id)));
+      setRefreshNotice(
+        hasChanges
+          ? "Passagens atualizadas com novos dados."
+          : "Sem atualiza\u00e7\u00f5es: nenhuma passagem mudou desde a \u00faltima consulta."
+      );
+    } catch (cause) {
+      setRefreshError(cause instanceof Error ? cause.message : "Erro ao atualizar as passagens.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
   async function compile() {
     const feeValue = Number(fee.replace(",", "."));
     if (
@@ -127,9 +158,24 @@ export function CompilationPage() {
             Selecione as passagens do mesmo contrato de locação para formar um lote e iniciar a régua D+0.
           </p>
         </div>
-        <Link className="button secondary" href="/lotes">
-          Ver lotes emitidos →
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            type="button"
+            className="button secondary refresh-icon-button"
+            onClick={() => void refreshPassages()}
+            disabled={loading || refreshing}
+            title={refreshing ? "Atualizando passagens pendentes" : "Atualizar passagens pendentes"}
+            aria-label={refreshing ? "Atualizando passagens pendentes" : "Atualizar passagens pendentes"}
+          >
+            <svg className={refreshing ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <Link className="button secondary" href="/lotes">
+            Ver lotes emitidos &rarr;
+          </Link>
+        </div>
       </header>
 
       {notice && (
@@ -141,6 +187,8 @@ export function CompilationPage() {
         </div>
       )}
 
+      {refreshError && <div className="notice error-notice" role="alert">{refreshError}</div>}
+      {refreshNotice && <div className="notice" role="status">{refreshNotice}</div>}
       {isViewer && (
         <div
           className="selection-summary"

@@ -23,7 +23,7 @@ model ContratoLocacao {
 
 model PassagemPedagio {
   id              Int           @id @default(autoincrement())
-  idCoral          String        @unique
+  idCoral         String        @unique
   numeroContrato  String
   cpfCliente      String
   telefoneCliente String?
@@ -43,20 +43,20 @@ model PassagemPedagio {
 }
 
 model LoteCobranca {
-  id                  Int               @id @default(autoincrement())
+  id                  Int                 @id @default(autoincrement())
   numeroContrato      String
   cpfCliente          String
   telefoneCliente     String?
   quantidadePassagens Int
   valorTotalCentavos  Int
-  taxaCentavos        Int               @default(0)
+  taxaCentavos        Int                 @default(0)
   valorFinalCentavos  Int
-  status              String            @default("PENDENTE")
+  status              String              @default("PENDENTE")
   adyenLinkId         String?
   adyenPaymentUrl     String?
   adyenPspReference   String?
-  etapaRegua          String            @default("D0")
-  dataCriacao         DateTime          @default(now())
+  etapaRegua          String              @default("D0")
+  dataCriacao         DateTime            @default(now())
   dataPagamento       DateTime?
   d5TentativaAt       DateTime?
   d7LembreteAt        DateTime?
@@ -64,6 +64,7 @@ model LoteCobranca {
   processandoAte      DateTime?
   passagens           PassagemPedagio[]
   logs                LogRegua[]
+  integrationJobs     IntegrationOutbox[]
 
   @@index([numeroContrato])
   @@index([status])
@@ -87,27 +88,45 @@ model LogRegua {
   @@map("logs_regua")
 }
 
+model IntegrationOutbox {
+  id                 Int          @id @default(autoincrement())
+  loteId             Int
+  lote               LoteCobranca @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  tipo               String
+  status             String       @default("PENDENTE")
+  tentativas         Int          @default(0)
+  proximaTentativaAt DateTime     @default(now())
+  processandoAte     DateTime?
+  ultimoErro         String?
+  dataCriacao        DateTime     @default(now())
+  atualizadoEm       DateTime     @updatedAt
+
+  @@unique([loteId, tipo])
+  @@index([status, proximaTentativaAt])
+  @@map("integration_outbox")
+}
+
 // =========================================================================
 // Better Auth - Autenticação & Perfis (Admin e Visualização)
 // =========================================================================
 
 model User {
-  id            String    @id
+  id            String   @id
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Plugin Admin / RBAC: perfis "admin" ou "viewer" (visualizacao)
-  role          String?   @default("viewer")
-  banned        Boolean?  @default(false)
-  banReason     String?
-  banExpires    DateTime?
+  role       String?   @default("viewer")
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
 
-  sessions      Session[]
-  accounts      Account[]
+  sessions Session[]
+  accounts Account[]
 
   @@map("users")
 }
@@ -156,5 +175,3 @@ model Verification {
 
   @@map("verifications")
 }
-
-

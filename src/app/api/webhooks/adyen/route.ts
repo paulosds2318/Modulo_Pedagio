@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Notificação Adyen inválida: notificationItems ausente." }, { status: 400 });
   }
 
+  try {
   for (const wrapper of payload.notificationItems) {
     const item = wrapper?.NotificationRequestItem as Record<string, unknown> | undefined;
     if (!item) continue;
@@ -122,6 +123,9 @@ export async function POST(request: Request) {
         },
       });
     }
+  }
+  } catch {
+    return NextResponse.json({ error: "Falha temporária ao processar a notificação Adyen." }, { status: 503 });
   }
 
   // Resposta padrão exigida pela Adyen

@@ -21,6 +21,7 @@ export function UsersPage() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
 
   // Formulário de Cadastro / Criação
   const [name, setName] = useState("");
@@ -42,17 +43,24 @@ export function UsersPage() {
   // Estado de Exclusão
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function loadUsers() {
+  async function loadUsers(showRefreshNotice = false) {
     setLoading(true);
     setError("");
+    setRefreshNotice("");
     try {
       const res = await fetch("/api/usuarios");
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Erro ao consultar usuários.");
       }
-      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("O servidor retornou uma resposta inválida para a lista de usuários.");
+      const hasChanges = JSON.stringify(users) !== JSON.stringify(data);
       setUsers(data);
+      if (showRefreshNotice) {
+        setRefreshNotice(hasChanges
+          ? "Lista de usuários atualizada com novos dados."
+          : "Nenhuma alteração encontrada. A lista de usuários já está atualizada.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro desconhecido.");
     } finally {
@@ -226,7 +234,8 @@ export function UsersPage() {
         </div>
       </header>
 
-      {error && <div className="notice error-notice">{error}</div>}
+      {error && <div className="notice error-notice" role="alert">{error}</div>}
+      {refreshNotice && <div className="notice" role="status">{refreshNotice}</div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "24px", alignItems: "start" }}>
         {/* Painel de Cadastro */}
@@ -325,11 +334,16 @@ export function UsersPage() {
             </div>
             <button
               type="button"
-              className="button secondary"
-              onClick={loadUsers}
-              style={{ fontSize: "11px", padding: "6px 10px" }}
+              className="button secondary refresh-icon-button"
+              onClick={() => void loadUsers(true)}
+              disabled={loading}
+              title={loading ? "Atualizando usuários" : "Atualizar lista de usuários"}
+              aria-label={loading ? "Atualizando usuários" : "Atualizar lista de usuários"}
             >
-              🔄 Atualizar
+              <svg className={loading ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
 

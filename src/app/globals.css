@@ -387,6 +387,37 @@ h2 {
   box-shadow: var(--shadow-sm);
 }
 
+.page-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.refresh-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.refresh-icon-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.spin {
+  animation: adyen-refresh-spin 0.8s linear infinite;
+}
+
+.refresh-icon-button .spin {
+  animation: adyen-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes adyen-refresh-spin {
+  to { transform: rotate(360deg); }
+}
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -512,7 +543,7 @@ h2 {
 .filter-field input,
 .filter-field select,
 .fee-field input,
-.manual-form input {
+.query-form input {
   min-height: 40px;
   padding: 9px 12px;
   border: 1px solid var(--line);
@@ -537,7 +568,7 @@ h2 {
 .filter-field input:focus,
 .filter-field select:focus,
 .fee-field input:focus,
-.manual-form input:focus {
+.query-form input:focus {
   border-color: var(--foco-red);
   box-shadow: 0 0 0 3px var(--foco-red-ring);
 }
@@ -811,7 +842,7 @@ td input[type="checkbox"] {
   color: var(--muted);
 }
 
-.manual-form {
+.query-form {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -819,7 +850,7 @@ td input[type="checkbox"] {
   margin-top: 14px;
 }
 
-.manual-form input {
+.query-form input {
   flex: 1;
   min-width: 200px;
 }

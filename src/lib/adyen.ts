@@ -108,6 +108,16 @@ export async function createPaymentLink(lotId: number, cents: number, contract: 
   return result as { id?: string; url?: string } | null;
 }
 
+export async function getPaymentLink(linkId: string) {
+  const result = await adyenRequest(`/paymentLinks/${encodeURIComponent(linkId)}`, undefined, "GET");
+  return result as {
+    id?: string;
+    reference?: string;
+    status?: "active" | "expired" | "completed" | "paymentPending";
+    amount?: { currency?: string; value?: number };
+  } | null;
+}
+
 export async function expirePaymentLink(linkId: string, lotId: number) {
   if (!linkId) return null;
   try {

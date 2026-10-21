@@ -19,10 +19,37 @@ const money = (c: number) =>
     c / 100
   );
 
+async function fetchDashboardData() {
+  const passagesResponse = await fetch("/api/passagens/pendentes");
+  const passagesData = await passagesResponse.json().catch(() => null);
+  if (!passagesResponse.ok) throw new Error(passagesData?.error || "N\u00e3o foi poss\u00edvel consultar as passagens pendentes.");
+  if (!Array.isArray(passagesData)) throw new Error("O servidor retornou dados inv\u00e1lidos para as passagens pendentes.");
+
+  const firstResponse = await fetch("/api/lotes?page=1&limit=100");
+  const firstResult = await firstResponse.json().catch(() => null);
+  if (!firstResponse.ok) throw new Error(firstResult?.error || "N\u00e3o foi poss\u00edvel consultar os lotes.");
+  if (!firstResult || !Array.isArray(firstResult.data) || !firstResult.pagination) {
+    throw new Error("O servidor retornou dados inv\u00e1lidos para os lotes.");
+  }
+
+  const lots: Lot[] = [...firstResult.data];
+  const totalPages = Number(firstResult.pagination.totalPages) || 1;
+  for (let page = 2; page <= totalPages; page += 1) {
+    const response = await fetch(`/api/lotes?page=${page}&limit=100`);
+    const result = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(result?.error || `N\u00e3o foi poss\u00edvel consultar a p\u00e1gina ${page} de lotes.`);
+    if (!result || !Array.isArray(result.data)) throw new Error(`O servidor retornou dados inv\u00e1lidos na p\u00e1gina ${page} de lotes.`);
+    lots.push(...result.data);
+  }
+
+  return { passagesCount: passagesData.length, lots };
+}
+
 export function TollDashboard() {
   const [passages, setPassages] = useState(0);
   const [lots, setLots] = useState<Lot[]>([]);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Filtros rápidos da Visão Geral
@@ -31,7 +58,7 @@ export function TollDashboard() {
   const [dateFilter, setDateFilter] = useState("");
 
   useEffect(() => {
-    Promise.all([fetch("/api/passagens/pendentes"), fetch("/api/lotes")])
+    Promise.all([fetch("/api/passagens/pendentes"), fetch("/api/lotes?page=1&limit=100")])
       .then(async ([p, l]) => {
         if (!p.ok || !l.ok) {
           throw new Error(
@@ -46,6 +73,27 @@ export function TollDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function refreshDashboard() {
+    setLoading(true);
+    setError("");
+    setRefreshNotice("");
+    try {
+      const { passagesCount: nextPassages, lots: nextLots } = await fetchDashboardData();
+      const hasChanges = passages !== nextPassages || JSON.stringify(lots) !== JSON.stringify(nextLots);
+
+      setPassages(nextPassages);
+      setLots(nextLots);
+      setRefreshNotice(
+        hasChanges
+          ? "Vis\u00e3o geral atualizada com novos dados."
+          : "Nenhuma altera\u00e7\u00e3o encontrada. A vis\u00e3o geral j\u00e1 est\u00e1 atualizada."
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao atualizar a vis\u00e3o geral.");
+    } finally {
+      setLoading(false);
+    }
+  }
   const openLots = lots.filter((lot) => lot.status === "EM_REGUA");
   const paidLots = lots.filter((lot) => lot.status === "PAGO");
   const outstanding = lots
@@ -83,12 +131,28 @@ export function TollDashboard() {
             Monitoramento diario de passagens, conciliacao de pagamentos e esteira de cobranca.
           </p>
         </div>
-        <Link className="button primary" href="/compilacao">
-          + Compilar passagens
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            type="button"
+            className="button secondary refresh-icon-button"
+            onClick={() => void refreshDashboard()}
+            disabled={loading}
+            title={loading ? "Atualizando visão geral" : "Atualizar visão geral"}
+            aria-label={loading ? "Atualizando visão geral" : "Atualizar visão geral"}
+          >
+            <svg className={loading ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <Link className="button primary" href="/compilacao">
+            + Compilar passagens
+          </Link>
+        </div>
       </header>
 
-      {error && <div className="notice error-notice">{error}</div>}
+      {error && <div className="notice error-notice" role="alert">{error}</div>}
+      {refreshNotice && <div className="notice" role="status">{refreshNotice}</div>}
 
       <section className="summary">
         <article>

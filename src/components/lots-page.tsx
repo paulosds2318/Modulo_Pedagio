@@ -56,12 +56,14 @@ export function LotsPage() {
   const [dataFim, setDataFim] = useState("");
 
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
   const [loading, setLoading] = useState(true);
 
   const fetchLots = useCallback(
-    async (pageToLoad = 1) => {
+    async (pageToLoad = 1): Promise<boolean | null> => {
       setLoading(true);
       setError("");
+      setRefreshNotice("");
       try {
         const params = new URLSearchParams();
         params.set("page", String(pageToLoad));
@@ -73,26 +75,43 @@ export function LotsPage() {
         if (dataInicio) params.set("dataInicio", dataInicio);
         if (dataFim) params.set("dataFim", dataFim);
 
-        const r = await fetch(`/api/lotes?${params.toString()}`);
-        if (!r.ok) throw new Error("Falha ao carregar a lista de lotes.");
-        const res = await r.json();
-
-        if (res.data) {
-          setLots(res.data);
-          setPagination(res.pagination);
-        } else if (Array.isArray(res)) {
-          setLots(res);
-          setPagination({ page: 1, limit: 10, total: res.length, totalPages: 1 });
+        const response = await fetch(`/api/lotes?${params.toString()}`);
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error || "Falha ao carregar a lista de lotes.");
+        if (!result || (!Array.isArray(result.data) && !Array.isArray(result))) {
+          throw new Error("O servidor retornou uma resposta inv\u00e1lida para a lista de lotes.");
         }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Erro inesperado.");
+
+        const nextLots: Lot[] = result.data ?? (Array.isArray(result) ? result : []);
+        const nextPagination: PaginationMeta = result.data
+          ? result.pagination
+          : { page: 1, limit: 10, total: nextLots.length, totalPages: 1 };
+        const hasChanges =
+          JSON.stringify(lots) !== JSON.stringify(nextLots) ||
+          JSON.stringify(pagination) !== JSON.stringify(nextPagination);
+
+        setLots(nextLots);
+        setPagination(nextPagination);
+        return hasChanges;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Erro inesperado.");
+        return null;
       } finally {
         setLoading(false);
       }
     },
-    [pagination.limit, search, status, etapaRegua, dataInicio, dataFim]
+    [pagination, lots, search, status, etapaRegua, dataInicio, dataFim]
   );
 
+  async function refreshLots() {
+    const hasChanges = await fetchLots(pagination.page);
+    if (hasChanges === null) return;
+    setRefreshNotice(
+      hasChanges
+        ? "Lista atualizada com novos dados."
+        : "Nenhuma alteração encontrada. A lista já está atualizada."
+    );
+  }
   useEffect(() => {
     let cancelled = false;
 
@@ -108,8 +127,11 @@ export function LotsPage() {
 
       try {
         const response = await fetch(`/api/lotes?${params.toString()}`);
-        if (!response.ok) throw new Error("Falha ao carregar a lista de lotes.");
-        const result = await response.json();
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error || "Falha ao carregar a lista de lotes.");
+        if (!result || (!Array.isArray(result.data) && !Array.isArray(result))) {
+          throw new Error("O servidor retornou uma resposta inv\u00e1lida para a lista de lotes.");
+        }
         if (cancelled) return;
 
         if (result.data) {
@@ -158,11 +180,16 @@ export function LotsPage() {
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
-            className="button secondary"
-            onClick={() => fetchLots(pagination.page)}
-            title="Atualizar dados agora"
+            className="button secondary refresh-icon-button"
+            onClick={() => void refreshLots()}
+            disabled={loading}
+            title={loading ? "Atualizando lista de lotes" : "Atualizar lista de lotes"}
+            aria-label={loading ? "Atualizando lista de lotes" : "Atualizar lista de lotes"}
           >
-            🔄 Atualizar Lista
+            <svg className={loading ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
           <Link className="button primary" href="/compilacao">
             + Compilar novo lote
@@ -170,7 +197,8 @@ export function LotsPage() {
         </div>
       </header>
 
-      {error && <div className="notice error-notice">{error}</div>}
+      {error && <div className="notice error-notice" role="alert">{error}</div>}
+      {refreshNotice && <div className="notice" role="status">{refreshNotice}</div>}
 
       <section className="panel" style={{ padding: "20px 24px" }}>
         {/* Formulário de Busca e Filtros */}

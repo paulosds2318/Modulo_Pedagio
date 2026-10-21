@@ -1,10 +1,7 @@
 "use client";
-
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useSession } from "@/lib/auth-client";
-
 type Entry = {
   id: number;
   etapa: string;
@@ -14,7 +11,6 @@ type Entry = {
   detalhesResposta: string | null;
   dataHora: string;
 };
-
 type Lot = {
   id: number;
   numeroContrato: string;
@@ -26,6 +22,7 @@ type Lot = {
   valorFinalCentavos: number;
   status: string;
   etapaRegua: string;
+  adyenLinkId: string | null;
   adyenPaymentUrl: string | null;
   dataCriacao: string;
   dataPagamento: string | null;
@@ -39,12 +36,10 @@ type Lot = {
   }[];
   logs: Entry[];
 };
-
 const money = (c: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     c / 100
   );
-
 const maskCpf = (cpf: string) => {
   const digits = cpf.replace(/\D/g, "");
   if (digits.length === 11) {
@@ -52,38 +47,25 @@ const maskCpf = (cpf: string) => {
   }
   return cpf;
 };
-
 const stages = [
   { key: "D0", label: "D+0: Emissão e Link Adyen", desc: "Envio de link Pay-by-link via e-mail e WhatsApp" },
   { key: "D5", label: "D+5: 1ª Tentativa no Cartão", desc: "Débito automático no cartão tokenizado (Coral)" },
   { key: "D7", label: "D+7: Lembrete Ativo", desc: "Mensagem de alerta e aviso via WhatsApp" },
   { key: "D10", label: "D+10: 2ª Tentativa no Cartão", desc: "Última tentativa de débito ou negativação" },
 ];
-
 export function LotDetailPage() {
   const params = useParams<{ id: string }>();
-  const { data: session } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
-  const isViewer = !session?.user || role !== "admin";
-
   const [lot, setLot] = useState<Lot | null>(null);
   const [error, setError] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [queryingAdyen, setQueryingAdyen] = useState(false);
+  const [queryMessage, setQueryMessage] = useState("");
   const [loading, setLoading] = useState(true);
-
   async function reload() {
-    const r = await fetch(`/api/lotes/${params.id}`);
-    let data;
-    try {
-      data = await r.json();
-    } catch {
-      throw new Error(`Servidor retornou status ${r.status} (${r.statusText})`);
-    }
-    if (!r.ok) throw new Error(data?.error || "Erro ao carregar detalhes do lote.");
+    const response = await fetch(`/api/lotes/${params.id}`);
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.error || "Erro ao carregar detalhes do lote.");
     setLot(data);
   }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -110,29 +92,61 @@ export function LotDetailPage() {
       cancelled = true;
     };
   }, [params.id]);
-
-  async function settle(status: "PAGO" | "INADIMPLENTE") {
-    setBusy(true);
+  async function refreshLot() {
+    if (!lot) return;
+    setQueryingAdyen(true);
     setError("");
+    setQueryMessage("Atualizando dados do lote...");
     try {
-      const r = await fetch(`/api/lotes/${params.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status, nota: note }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao liquidar lote.");
-      setNote("");
-      await reload();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao atualizar lote.");
+      const response = await fetch(`/api/lotes/${params.id}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Erro ao atualizar os detalhes do lote.");
+      if (!data || typeof data !== "object" || !Array.isArray(data.logs) || !Array.isArray(data.passagens)) {
+        throw new Error("O servidor retornou dados inv\u00e1lidos para os detalhes do lote.");
+      }
+
+      const hasChanges = JSON.stringify(lot) !== JSON.stringify(data);
+      setLot(data);
+      setQueryMessage(
+        hasChanges
+          ? "Os dados do lote foram atualizados."
+          : data.adyenLinkId
+            ? "Nenhuma altera\u00e7\u00e3o encontrada. Os dados do lote j\u00e1 est\u00e3o atualizados."
+            : "Nenhuma altera\u00e7\u00e3o encontrada. Os dados est\u00e3o atualizados; o link Adyen ainda n\u00e3o foi configurado."
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao atualizar os detalhes do lote.");
     } finally {
-      setBusy(false);
+      setQueryingAdyen(false);
     }
   }
-
+  async function queryAdyen() {
+    if (!lot) return;
+    const previousStatus = lot.status;
+    setQueryingAdyen(true);
+    setError("");
+    setQueryMessage("Consultando o pagamento na Adyen...");
+    try {
+      const response = await fetch(`/api/lotes/${params.id}/consultar-adyen`, {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Falha ao consultar a Adyen.");
+      if (!data || typeof data.statusLote !== "string" || typeof data.statusAdyen !== "string") {
+        throw new Error("A resposta da consulta Adyen veio incompleta. Tente novamente.");
+      }
+      if (data.statusLote !== previousStatus) {
+        setQueryMessage("A Adyen confirmou o pagamento. O lote foi atualizado para Pago.");
+      } else {
+        setQueryMessage(`Sem atualiza\u00e7\u00f5es: o lote permanece ${data.statusLote.replaceAll("_", " ")}. Status na Adyen: ${data.statusAdyen}.`);
+      }
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao consultar a Adyen.");
+    } finally {
+      setQueryingAdyen(false);
+    }
+  }
   if (loading && !lot) {
     return (
       <main className="shell">
@@ -140,7 +154,6 @@ export function LotDetailPage() {
       </main>
     );
   }
-
   if (!lot) {
     return (
       <main className="shell">
@@ -153,9 +166,8 @@ export function LotDetailPage() {
       </main>
     );
   }
-
   const logStages = new Set(lot.logs.map((x) => x.etapa));
-
+  const canQueryAdyen = Boolean(lot.adyenLinkId && lot.status !== "PAGO");
   return (
     <main className="shell">
       <div className="backline">
@@ -163,7 +175,6 @@ export function LotDetailPage() {
         <span>/</span>
         <span>Lote #{lot.id}</span>
       </div>
-
       <header className="page-heading">
         <div className="page-heading-left">
           <span className="eyebrow">Contrato Coral: {lot.numeroContrato}</span>
@@ -173,33 +184,45 @@ export function LotDetailPage() {
             {lot.dataPagamento && ` · Pago em ${new Date(lot.dataPagamento).toLocaleString("pt-BR")}`}
           </p>
         </div>
-        <span className={`status status-${lot.status.toLowerCase()}`}>
-          {lot.status.replaceAll("_", " ")}
-        </span>
+        <div className="page-heading-actions">
+            <button
+              className="button secondary refresh-icon-button"
+              type="button"
+              aria-label={queryingAdyen ? "Atualizando lote" : canQueryAdyen ? "Consultar status na Adyen" : "Atualizar detalhes do lote"}
+              title={queryingAdyen ? "Atualizando lote" : canQueryAdyen ? "Consultar status na Adyen" : "Atualizar detalhes do lote"}
+              disabled={queryingAdyen}
+              onClick={() => void (canQueryAdyen ? queryAdyen() : refreshLot())}
+            >
+              <svg className={queryingAdyen ? "spin" : ""} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          <span className={`status status-${lot.status.toLowerCase()}`}>
+            {lot.status.replaceAll("_", " ")}
+          </span>
+        </div>
       </header>
 
-      {error && <div className="notice error-notice">{error}</div>}
-
+      {error && <div className="notice error-notice" role="alert">{error}</div>}
+      {queryMessage && <div className="notice" role="status">{queryMessage}</div>}
       <section className="summary">
         <article>
           <span>Soma dos Pedágios</span>
           <strong>{money(lot.valorTotalCentavos)}</strong>
           <small>{lot.quantidadePassagens} passagem(ns)</small>
         </article>
-
         <article>
           <span>Taxa Administrativa</span>
           <strong>{money(lot.taxaCentavos)}</strong>
           <small>Processamento operacional</small>
         </article>
-
         <article>
           <span>Total da Cobrança</span>
           <strong>{money(lot.valorFinalCentavos)}</strong>
           <small>Valor final faturado</small>
         </article>
       </section>
-
       <section className="panel">
         <div className="panel-head">
           <div>
@@ -217,7 +240,6 @@ export function LotDetailPage() {
             </a>
           )}
         </div>
-
         <div className="timeline">
           {stages.map((stg) => {
             const isDone = logStages.has(stg.key) || lot.etapaRegua === stg.key;
@@ -233,7 +255,6 @@ export function LotDetailPage() {
             );
           })}
         </div>
-
         <div className="event-list">
           <h3 style={{ fontSize: "14px", margin: "16px 0 12px" }}>
             Histórico de Eventos e Auditoria
@@ -258,7 +279,6 @@ export function LotDetailPage() {
           )}
         </div>
       </section>
-
       <section className="panel">
         <div className="panel-head">
           <div>
@@ -269,7 +289,6 @@ export function LotDetailPage() {
             </p>
           </div>
         </div>
-
         <div className="table-wrap">
           <table>
             <thead>
@@ -297,44 +316,6 @@ export function LotDetailPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Baixa Manual e Encerramento de Cobrança</h2>
-          </div>
-        </div>
-
-        <p className="muted" style={{ marginBottom: "12px", fontSize: "12px" }}>
-          Esta acao exige uma sessao de administrador e justificativa registrada em auditoria.
-        </p>
-
-        <div className="manual-form">
-<input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Justificativa da baixa manual (mínimo 3 caracteres)"
-            maxLength={500}
-            disabled={isViewer}
-          />
-          <button
-            className="button primary"
-            disabled={isViewer || busy || note.trim().length < 5 || lot.status === "PAGO"}
-            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
-            onClick={() => void settle("PAGO")}
-          >
-            {busy ? "Processando…" : "Registrar como Pago"}
-          </button>
-          <button
-            className="button secondary"
-            disabled={isViewer || busy || note.trim().length < 5 || lot.status === "INADIMPLENTE"}
-            title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
-            onClick={() => void settle("INADIMPLENTE")}
-          >
-            {busy ? "Processando…" : "Encerrar como Inadimplente"}
-          </button>
         </div>
       </section>
     </main>

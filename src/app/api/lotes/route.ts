@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getServerSession } from "@/lib/auth";
+import { getServerSession, hasRole } from "@/lib/auth";
+import { isCalendarDate, saoPauloDateRange } from "@/lib/date-range";
+import { maskCpf, maskPhone } from "@/lib/pii";
 
 export const runtime = "nodejs";
 
@@ -18,6 +20,9 @@ export async function GET(request: Request) {
   const dataInicio = searchParams.get("dataInicio")?.trim() || "";
   const dataFim = searchParams.get("dataFim")?.trim() || "";
   const etapaRegua = searchParams.get("etapaRegua")?.trim() || "TODAS";
+  if ((dataInicio && !isCalendarDate(dataInicio)) || (dataFim && !isCalendarDate(dataFim))) {
+    return NextResponse.json({ error: "Informe datas válidas no formato AAAA-MM-DD." }, { status: 400 });
+  }
   const where: Record<string, unknown> = {};
 
   if (status !== "TODOS") where.status = status;
@@ -30,12 +35,7 @@ export async function GET(request: Request) {
       ...(Number.isFinite(searchNum) ? [{ id: searchNum }] : []),
     ];
   }
-  if (dataInicio || dataFim) {
-    where.dataCriacao = {
-      ...(dataInicio ? { gte: new Date(`${dataInicio}T00:00:00.000Z`) } : {}),
-      ...(dataFim ? { lte: new Date(`${dataFim}T23:59:59.999Z`) } : {}),
-    };
-  }
+  if (dataInicio || dataFim) where.dataCriacao = saoPauloDateRange(dataInicio || undefined, dataFim || undefined);
 
   try {
     const [total, lots] = await Promise.all([
@@ -48,7 +48,11 @@ export async function GET(request: Request) {
       }),
     ]);
     return NextResponse.json({
-      data: lots,
+      data: hasRole(session, "admin") ? lots : lots.map((lot) => ({
+        ...lot,
+        cpfCliente: maskCpf(lot.cpfCliente),
+        telefoneCliente: maskPhone(lot.telefoneCliente),
+      })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     });
   } catch {

@@ -8,7 +8,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test test/security.test.ts",
+    "test": "node --experimental-strip-types --test test/security.test.ts test/date-range.test.ts test/pii.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",

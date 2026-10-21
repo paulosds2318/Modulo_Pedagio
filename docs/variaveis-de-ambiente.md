@@ -54,7 +54,7 @@ A integração recebe do Coral de 1 a 500 passagens por chamada. Cada registro d
 
 | Variável | O que configura | Quando usar |
 |---|---|---|
-| **WHATSAPP_API_URL** | URL do gateway de envio. O app envia to, text e reference. | Configure para habilitar os envios. Sem URL, mensagens não são enviadas pelo gateway. |
+| **WHATSAPP_API_URL** | URL do gateway de envio. O adaptador assume o payload to, text e reference. | A integração ainda não foi validada com o fornecedor. Para retentativas seguras, o gateway precisa deduplicar pelo valor estável de reference. Sem URL, a tarefa fica aguardando configuração. |
 | **WHATSAPP_API_TOKEN** | Bearer enviado ao gateway de saída. | Use se o gateway exigir autenticação. |
 | **WHATSAPP_WEBHOOK_TOKEN** | Segredo Bearer para autenticar retornos de entrega em POST /api/webhooks/whatsapp. | Configure no provedor e no app se receber status por webhook. |
 

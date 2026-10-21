@@ -39,21 +39,21 @@ O Docker Compose serve para desenvolvimento e validação do container. O deploy
 - `/`: indicadores e lotes recentes.
 - `/compilacao`: filtro por contrato/placa/praça/loja/período, seleção de passagens e compilação.
 - `/lotes`: busca e filtro por status.
-- `/lotes/[id]`: detalhes, passagens, link, eventos da régua e baixa manual.
+- `/lotes/[id]`: detalhes, passagens, link, eventos da régua e consulta sob demanda do status Adyen.
 
 ## Integrações e contratos canônicos
 
 
 - `POST /api/locacoes/sincronizar`: recebe `[{numeroContrato, cpfCliente, telefoneCliente?, placa, dataRetirada, dataDevolucao, lojaRetirada}]` do Coral; autenticação `Bearer CORAL_RENTALS_SYNC_SECRET`.
 - `POST /api/passagens`: recebe do Coral de 1 a 500 passagens no formato `{idCoral, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer CORAL_PASSAGES_SYNC_SECRET`. `idCoral` é único; reenvios são ignorados sem sobrescrever a passagem já importada. `valorCentavos` deve ser inteiro em centavos.
-- `POST /api/lotes/compilar`: cria o lote, tenta criar Pay-by-link Adyen e envia a notificação inicial pelo gateway WhatsApp.
+- `POST /api/lotes/compilar`: cria o lote e grava tarefas D+0 numa outbox persistente. Tenta executá-las imediatamente; falhas temporárias são repetidas pelo cron com espera crescente e até 10 tentativas. Tarefas sem configuração de integração aguardam configuração e são verificadas diariamente.
 - `GET` ou `POST /api/cron/regua`: executar diariamente com `Authorization: Bearer CRON_SECRET`. Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.
 - `POST /api/webhooks/whatsapp`: contrato `{messageId,status,details?}` e `Authorization: Bearer WHATSAPP_WEBHOOK_TOKEN`.
 - `GET /api/lotes/[id]`: retorna lote, passagens e auditoria.
-- `PATCH /api/lotes/[id]`: baixa manual para `PAGO`/`INADIMPLENTE`; exige sessao de administrador e nota auditavel.
+- `POST /api/lotes/[id]/consultar-adyen`: consulta o status do link na Adyen; exige sessão de administrador. Só atualiza o lote como pago após validar status, referência, moeda e valor.
 
-O gateway WhatsApp espera `POST {to,text,reference}` e pode retornar `{messageId}`. O endpoint Coral para token espera `POST {numeroContrato,cpfCliente}` e responde `{storedPaymentMethodId}`. Ajuste esses adaptadores ao contrato autenticado real. PAN e CVV não são armazenados.
+As integrações externas ainda não foram conectadas nem validadas com os fornecedores. O adaptador WhatsApp assume `POST {to,text,reference}` e pode retornar `{messageId}`; para retentativas seguras, o gateway precisa deduplicar pelo campo estável `reference`. O adaptador de consulta de token Coral assume `POST {numeroContrato,cpfCliente}` e resposta `{storedPaymentMethodId}`. Confirme autenticação, payloads, idempotência e tratamento de erros com cada fornecedor antes de habilitar em produção. PAN e CVV não são armazenados.
 
 ## Configuração
 
