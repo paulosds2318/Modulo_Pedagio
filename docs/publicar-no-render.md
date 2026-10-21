@@ -1,18 +1,23 @@
 # Publicar no Render
 
-O `render.yaml` cria um serviço web Docker e um PostgreSQL, configura a conexão entre eles, gera o segredo do Better Auth e usa `/api/health` para verificar a aplicação.
+O arquivo render.yaml define um serviço web Docker e um banco PostgreSQL, configura a conexão entre eles, gera o segredo do Better Auth e usa /api/health para verificar a aplicação.
 
 ## Criar a publicação
 
-1. Entre no [Render Dashboard](https://dashboard.render.com/) e conecte sua conta GitHub, se ainda não estiver conectada.
-2. Selecione **New → Blueprint** e escolha o repositório `paulosds2318/Modulo_Pedagio`.
-3. Revise os recursos identificados no `render.yaml` e confirme a criação.
-4. Aguarde o deploy ficar saudável. O Render exibirá a URL pública `onrender.com` do serviço.
+1. Acesse o Render Dashboard e crie um Blueprint.
+2. Conecte o repositório paulosds2318/Modulo_Pedagio. Se ele não aparecer na lista do GitHub, autorize o aplicativo Render para esse repositório ou use a opção Public Git Repository com a URL https://github.com/paulosds2318/Modulo_Pedagio.
+3. Use a branch main e o arquivo render.yaml na raiz do repositório.
+4. Informe SEED_ADMIN_PASSWORD e SEED_VIEWER_PASSWORD com senhas fortes, diferentes e com pelo menos 12 caracteres.
+5. Revise os recursos e confirme o deploy. Aguarde o serviço web ficar Live e verifique /api/health.
 
-O deploy do app executa as migrações Prisma automaticamente antes de iniciar o servidor. Após o primeiro deploy bem-sucedido, o `initialDeployHook` executa `npm run seed:dev` uma vez e cria usuários e dados fictícios de demonstração. O Render pedirá `SEED_ADMIN_PASSWORD` e `SEED_VIEWER_PASSWORD` durante a criação do Blueprint; escolha senhas fortes com pelo menos 12 caracteres. O usuário administrador inicial é `admin@focoalugueldecarros.com.br` e o visualizador é `visualizador@focoalugueldecarros.com.br`. As senhas não são exibidas nem gravadas no repositório.
+O Dockerfile aplica as migrações Prisma antes de iniciar o servidor. A migração de autenticação cria as tabelas do Better Auth antes da execução do seed. Após o primeiro deploy bem-sucedido, initialDeployHook executa npm run seed:dev uma única vez. Os usuários de demonstração são admin@focoalugueldecarros.com.br e visualizador@focoalugueldecarros.com.br. As senhas não são gravadas no repositório.
+
+## Atualizar a aplicação
+
+Faça commit e push das alterações para a branch main. Se o serviço estiver conectado pela opção Public Git Repository, abra o serviço no Render e use Manual Deploy > Deploy latest commit. Para deploy automático, conecte o GitHub como provedor de deploy, autorize o repositório e configure Auto-Deploy como On Commit.
 
 ## Limites do plano de demonstração
 
-Esta configuração usa recursos gratuitos para facilitar uma demonstração. O serviço web pode levar cerca de um minuto para acordar após ficar inativo. O PostgreSQL gratuito expira após 30 dias; após esse prazo, é necessário fazer upgrade dentro do período de recuperação para manter os dados. Não use este banco para dados reais de clientes ou operação. Para uso contínuo, altere os planos do app e do PostgreSQL para planos pagos antes de criar os recursos.
+Esta configuração usa recursos gratuitos para facilitar uma demonstração. O serviço web pode levar cerca de um minuto para acordar após ficar inativo. O PostgreSQL gratuito tem prazo de expiração definido pelo Render; confira a data no painel. Não use esse banco para dados reais de clientes ou operação. Para uso contínuo, avalie planos pagos e configure backups.
 
-As credenciais Adyen, Coral, WhatsApp e CRON foram deixadas de fora porque as integrações ainda não foram configuradas. Adicione-as depois pelo painel do Render, sem colocá-las no `render.yaml`.
+As credenciais Adyen, Coral, WhatsApp e CRON não estão configuradas porque as integrações ainda não foram conectadas. Adicione-as depois pelo painel do Render, sem colocá-las no render.yaml.
