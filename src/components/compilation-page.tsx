@@ -155,7 +155,7 @@ export function CompilationPage() {
           <span className="eyebrow">Operação · Faturamento</span>
           <h1>Compilar Passagens</h1>
           <p>
-            Selecione as passagens do mesmo contrato de locação para formar um lote e iniciar a régua D+0.
+            As passagens do Coral são compiladas automaticamente ao chegar. Use esta tela para revisar e compilar manualmente grupos que ficaram pendentes por erro.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>

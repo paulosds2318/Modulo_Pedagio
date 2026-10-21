@@ -37,7 +37,7 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 ## Páginas
 
 - `/`: indicadores e lotes recentes.
-- `/compilacao`: filtro por contrato/placa/praça/loja/período, seleção de passagens e compilação.
+- `/compilacao`: consulta passagens pendentes e permite compilação manual quando um grupo não pôde ser compilado automaticamente.
 - `/lotes`: busca e filtro por status.
 - `/lotes/[id]`: detalhes, passagens, link, eventos da régua e consulta sob demanda do status Adyen.
 
@@ -45,7 +45,7 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 
 
 - `POST /api/locacoes/sincronizar`: recebe `[{numeroContrato, cpfCliente, telefoneCliente?, placa, dataRetirada, dataDevolucao, lojaRetirada}]` do Coral; autenticação `Bearer CORAL_RENTALS_SYNC_SECRET`.
-- `POST /api/passagens`: recebe do Coral de 1 a 500 passagens no formato `{idCoral, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer CORAL_PASSAGES_SYNC_SECRET`. `idCoral` é único; reenvios são ignorados sem sobrescrever a passagem já importada. `valorCentavos` deve ser inteiro em centavos.
+- `POST /api/passagens`: recebe do Coral de 1 a 500 passagens no formato `{idCoral, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer CORAL_PASSAGES_SYNC_SECRET`. Após importar, compila automaticamente as passagens pendentes daquele envio, agrupadas por contrato e CPF, e inicia a etapa D+0. `idCoral` é único; reenvios não duplicam passagens nem lotes já criados. Se um grupo for inválido, ele permanece pendente e a resposta informa a falha para permitir correção e compilação manual. `valorCentavos` deve ser inteiro em centavos.
 - `POST /api/lotes/compilar`: cria o lote e grava tarefas D+0 numa outbox persistente. Tenta executá-las imediatamente; falhas temporárias são repetidas pelo cron com espera crescente e até 10 tentativas. Tarefas sem configuração de integração aguardam configuração e são verificadas diariamente.
 - `GET` ou `POST /api/cron/regua`: executar diariamente com `Authorization: Bearer CRON_SECRET`. Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.
