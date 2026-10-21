@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PAGE_PATHS = ["/login", "/_next", "/favicon"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Each API route validates its own session, role, bearer token, or webhook signature.
