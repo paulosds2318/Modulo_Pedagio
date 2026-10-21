@@ -19,6 +19,19 @@ export async function PUT(
   }
 
   const { id } = await context.params;
+  if (id === session.user.id) {
+    return NextResponse.json({ error: "Por segurança, não é permitido editar o próprio usuário." }, { status: 403 });
+  }
+
+  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+  if (!target) return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
+  const isMaster = hasRole(session, "master");
+  if (target.role === "master") {
+    return NextResponse.json({ error: "A conta master não pode ser editada." }, { status: 403 });
+  }
+  if (target.role === "admin" && !isMaster) {
+    return NextResponse.json({ error: "Somente o administrador master pode editar outros administradores." }, { status: 403 });
+  }
 
   try {
     const body = (await request.json()) as {
@@ -28,6 +41,9 @@ export async function PUT(
       password?: string;
     };
 
+    if (body.role === "admin" && !isMaster) {
+      return NextResponse.json({ error: "Somente o administrador master pode atribuir o perfil de administrador." }, { status: 403 });
+    }
     const name = body.name?.trim();
     const newRole = body.role === "admin" ? "admin" : "viewer";
     const password = body.password?.trim();
@@ -93,14 +109,16 @@ export async function DELETE(
 
   const { id } = await context.params;
 
-  // Trava de segurança: impede que o próprio administrador se exclua
   if (id === currentUserId) {
-    return NextResponse.json(
-      { error: "Por segurança, você não pode excluir o seu próprio usuário logado." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Por segurança, não é permitido excluir o próprio usuário." }, { status: 403 });
   }
 
+  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+  if (!target) return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
+  if (target.role === "master") return NextResponse.json({ error: "A conta master não pode ser excluída." }, { status: 403 });
+  if (target.role === "admin" && !hasRole(session, "master")) {
+    return NextResponse.json({ error: "Somente o administrador master pode excluir outros administradores." }, { status: 403 });
+  }
   try {
     // Cascade exclui contas e sessões
     await db.user.delete({ where: { id } });

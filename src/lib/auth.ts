@@ -13,10 +13,14 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
   },
-  plugins: [admin({ defaultRole: "viewer", adminRoles: ["admin"] })],
+  plugins: [admin({ defaultRole: "viewer", adminRoles: ["admin", "master"] })],
 });
 
-export type UserRole = "admin" | "viewer";
+export type UserRole = "master" | "admin" | "viewer";
+export const MASTER_ADMIN_EMAIL = (process.env.MASTER_ADMIN_EMAIL || "paulo.marrocos@aluguefoco.com.br").trim().toLowerCase();
+export function isMasterEmail(email: string) {
+  return email.trim().toLowerCase() === MASTER_ADMIN_EMAIL;
+}
 
 export async function getServerSession() {
   try {
@@ -31,7 +35,14 @@ export async function getServerSession() {
 export function hasRole(session: unknown, role: UserRole): boolean {
   if (!session || typeof session !== "object" || !("user" in session)) return false;
   const user = (session as { user?: unknown }).user;
-  return Boolean(user && typeof user === "object" && "role" in user && (user as { role?: unknown }).role === role);
+  if (!user || typeof user !== "object") return false;
+  const userRole = "role" in user ? (user as { role?: unknown }).role : undefined;
+  const email = "email" in user && typeof (user as { email?: unknown }).email === "string"
+    ? (user as { email: string }).email.toLowerCase()
+    : "";
+  if (role === "master") return userRole === "master" || email === MASTER_ADMIN_EMAIL;
+  if (role === "admin") return userRole === "admin" || userRole === "master" || email === MASTER_ADMIN_EMAIL;
+  return userRole === role;
 }
 
 export function hasBearerSecret(request: Request, secret: string | undefined) {

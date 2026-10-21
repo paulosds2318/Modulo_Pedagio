@@ -12,7 +12,7 @@ export function AppNav() {
 
   const user = session?.user;
   const role = (user as { role?: string } | undefined)?.role || "viewer";
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "master";
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("toll-manager-theme");
     document.documentElement.dataset.theme = savedTheme === "dark" ? "dark" : "light";
@@ -142,7 +142,7 @@ export function AppNav() {
                   border: `1px solid ${isAdmin ? "var(--foco-red-light)" : "var(--line)"}`,
                 }}
               >
-                {isAdmin ? "Perfil Admin" : "Perfil Visualização"}
+                {role === "master" ? "Perfil Master" : isAdmin ? "Perfil Admin" : "Perfil Visualização"}
               </span>
             </div>
 

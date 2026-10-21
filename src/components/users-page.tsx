@@ -16,7 +16,8 @@ export function UsersPage() {
   const { data: session, isPending } = useSession();
   const currentUserId = session?.user?.id;
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
-  const isAdmin = role === "admin";
+  const isMaster = role === "master";
+  const isAdmin = role === "admin" || isMaster;
 
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -308,7 +309,7 @@ export function UsersPage() {
                 onChange={(e) => setNewRole(e.target.value as "viewer" | "admin")}
               >
                 <option value="viewer">Visualização (Somente leitura - Dashboards e Lotes)</option>
-                <option value="admin">Administrador (Total - Compilação, Sincronização e Baixa)</option>
+                {isMaster && <option value="admin">Administrador (Total - Compilação, Sincronização e Baixa)</option>}
               </select>
             </label>
 
@@ -376,17 +377,17 @@ export function UsersPage() {
                           style={{
                             fontSize: "10px",
                             padding: "2px 8px",
-                            background: u.role === "admin" ? "var(--foco-red-subtle)" : "#F3F4F6",
-                            color: u.role === "admin" ? "var(--foco-red)" : "var(--muted)",
-                            border: `1px solid ${u.role === "admin" ? "var(--foco-red-light)" : "var(--line)"}`,
+                            background: u.role === "admin" || u.role === "master" ? "var(--foco-red-subtle)" : "#F3F4F6",
+                            color: u.role === "admin" || u.role === "master" ? "var(--foco-red)" : "var(--muted)",
+                            border: `1px solid ${u.role === "admin" || u.role === "master" ? "var(--foco-red-light)" : "var(--line)"}`,
                           }}
                         >
-                          {u.role === "admin" ? "ADMINISTRADOR" : "VISUALIZAÇÃO"}
+                          {u.role === "master" ? "ADMINISTRADOR MASTER" : u.role === "admin" ? "ADMINISTRADOR" : "VISUALIZAÇÃO"}
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <div style={{ display: "inline-flex", gap: "6px" }}>
-                          <button
+                          {u.id !== currentUserId && u.role !== "master" && (isMaster || u.role !== "admin") && <button
                             type="button"
                             className="button secondary"
                             onClick={() => startEdit(u)}
@@ -394,8 +395,8 @@ export function UsersPage() {
                             title="Editar nome, perfil ou senha"
                           >
                             ✏️ Editar
-                          </button>
-                          {u.id !== currentUserId && (
+                          </button>}
+                          {u.id !== currentUserId && u.role !== "master" && (isMaster || u.role !== "admin") && (
                             <button
                               type="button"
                               className="button secondary"
@@ -495,7 +496,7 @@ export function UsersPage() {
                   onChange={(e) => setEditRole(e.target.value as "viewer" | "admin")}
                 >
                   <option value="viewer">Visualização (Somente Leitura)</option>
-                  <option value="admin">Administrador (Acesso Total)</option>
+                  {isMaster && <option value="admin">Administrador (Acesso Total)</option>}
                 </select>
               </label>
 

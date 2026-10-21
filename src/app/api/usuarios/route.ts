@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getServerSession, hasRole } from "@/lib/auth";
+import { getServerSession, hasRole, isMasterEmail } from "@/lib/auth";
 import { hashPassword } from "better-auth/crypto";
 import { randomUUID } from "node:crypto";
 
@@ -31,14 +31,22 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!await isAdmin()) return NextResponse.json({ error: "Acesso restrito a administradores." }, { status: 403 });
+  const session = await getServerSession();
+  if (!session || !hasRole(session, "admin")) return NextResponse.json({ error: "Acesso restrito a administradores." }, { status: 403 });
   let body: unknown;
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: "JSON invalido." }, { status: 400 }); }
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Dados de usuario invalidos." }, { status: 400 });
+  const isMaster = hasRole(session, "master");
+  if (parsed.data.role === "admin" && !isMaster) {
+    return NextResponse.json({ error: "Somente o administrador master pode criar administradores." }, { status: 403 });
+  }
   try {
     const email = parsed.data.email.toLowerCase();
+    if (isMasterEmail(email) && !isMaster) {
+      return NextResponse.json({ error: "Somente o administrador master pode atribuir essa conta." }, { status: 403 });
+    }
     if (await db.user.findUnique({ where: { email } })) {
       return NextResponse.json({ error: "Ja existe usuario com este email." }, { status: 409 });
     }
@@ -46,7 +54,7 @@ export async function POST(request: Request) {
     const now = new Date();
     const user = await db.$transaction(async (tx) => {
       const created = await tx.user.create({
-        data: { id: randomUUID(), name: parsed.data.name, email, emailVerified: true, role: parsed.data.role, createdAt: now, updatedAt: now },
+        data: { id: randomUUID(), name: parsed.data.name, email, emailVerified: true, role: isMasterEmail(email) ? "master" : parsed.data.role, createdAt: now, updatedAt: now },
       });
       await tx.account.create({
         data: { id: randomUUID(), accountId: created.id, providerId: "credential", userId: created.id, password, createdAt: now, updatedAt: now },

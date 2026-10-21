@@ -24,7 +24,7 @@ const money = (c: number) =>
 export function CompilationPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
-  const isViewer = !session?.user || role !== "admin";
+  const isViewer = !session?.user || (role !== "admin" && role !== "master");
 
   const [all, setAll] = useState<Passage[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
