@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useSession, signOut } from "@/lib/auth-client";
 
 export function AppNav() {
@@ -12,7 +13,31 @@ export function AppNav() {
   const user = session?.user;
   const role = (user as { role?: string } | undefined)?.role || "viewer";
   const isAdmin = role === "admin";
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("toll-manager-theme");
+    document.documentElement.dataset.theme = savedTheme === "dark" ? "dark" : "light";
+  }, []);
 
+  function toggleTheme() {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("toll-manager-theme", nextTheme);
+  }
+
+  function renderThemeToggle() {
+    return (
+      <button
+        type="button"
+        className="theme-toggle"
+        onClick={toggleTheme}
+        aria-label="Alternar tema claro ou escuro"
+        title="Alternar tema claro ou escuro"
+      >
+        <span aria-hidden="true">◐</span>
+        <span className="theme-toggle-label">Tema</span>
+      </button>
+    );
+  }
   async function handleSignOut() {
     await signOut();
     router.push("/login");
@@ -39,6 +64,7 @@ export function AppNav() {
           </span>
         </div>
         <div className="nav-right">
+          {renderThemeToggle()}
           <span className="coral-tag">
             <span className="coral-tag-dot" />
             Portal de Autenticação
@@ -97,6 +123,7 @@ export function AppNav() {
       </div>
 
       <div className="nav-right" style={{ gap: "10px" }}>
+        {renderThemeToggle()}
         {user ? (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

@@ -34,6 +34,7 @@ export default function LoginPage() {
 
   return (
     <div
+      className="login-page"
       style={{
         minHeight: "100vh",
         background: "radial-gradient(ellipse at 50% -20%, #FAFBFB 0%, #EEF2F4 60%, #E2E8F0 100%)",
@@ -94,6 +95,7 @@ export default function LoginPage() {
 
         {/* Card Branco Clean & Corporativo */}
         <div
+          className="login-card"
           style={{
             background: "#FFFFFF",
             borderRadius: "14px",
