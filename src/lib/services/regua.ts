@@ -43,6 +43,18 @@ async function tryCardCharge(
     return "UNAVAILABLE";
   }
 
+  if (fresh.adyenPaymentUrl && !fresh.adyenLinkId) {
+    await addLog(
+      lot.id,
+      stage,
+      "COBRAR_CARTAO_BLOQUEADO_LINK_ATIVO",
+      "Adyen",
+      "BLOQUEADO",
+      "Débito automático suspenso: a API Coral/Foco não retornou um identificador que permita expirar o link ativo com segurança."
+    );
+    return "UNAVAILABLE";
+  }
+
   // 2. Validação de Credenciais
   if (!process.env.ADYEN_API_KEY || !process.env.ADYEN_MERCHANT_ACCOUNT) {
     await addLog(
@@ -169,19 +181,20 @@ async function tryCardCharge(
 
       // Gera novo Pay-by-link para o cliente pagar manualmente após recusa do cartão
       try {
-        const link = await createPaymentLink(fresh.id, fresh.valorFinalCentavos, fresh.numeroContrato);
+        const rental = await db.contratoLocacao.findUnique({ where: { numeroContrato: fresh.numeroContrato }, select: { dataRetirada: true } });
+        const link = await createPaymentLink(fresh.id, fresh.valorFinalCentavos, fresh.numeroContrato, fresh.cpfCliente, rental?.dataRetirada);
         if (link?.url) {
           await db.loteCobranca.update({
             where: { id: fresh.id },
-            data: { adyenLinkId: link.id, adyenPaymentUrl: link.url },
+            data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url },
           });
           await addLog(
             fresh.id,
             stage,
             "CRIAR_NOVO_LINK",
-            "Adyen",
+            "Coral/Foco",
             "SUCESSO",
-            `Novo link de pagamento gerado após recusa do cartão: ${link.url}`
+            "Novo link de pagamento solicitado à API Coral/Foco após recusa do cartão."
           );
         }
       } catch (error) {

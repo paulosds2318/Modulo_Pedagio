@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { createCoralPaymentLink } from "@/lib/services/coral-pay-by-link";
 
 function config() {
   const key = process.env.ADYEN_API_KEY?.trim();
@@ -86,7 +87,7 @@ async function adyenRequest(
   return json;
 }
 
-export async function createPaymentLink(lotId: number, cents: number, contract: string) {
+async function createAdyenPaymentLink(lotId: number, cents: number, contract: string) {
   if (cents <= 0) {
     throw new Error("Segurança de pagamento: valor da cobrança deve ser maior que zero.");
   }
@@ -106,6 +107,16 @@ export async function createPaymentLink(lotId: number, cents: number, contract: 
     `foco-toll-lot-${lotId}-link-v1`
   );
   return result as { id?: string; url?: string } | null;
+}
+
+export async function createPaymentLink(
+  lotId: number,
+  cents: number,
+  contract: string,
+  cpf: string,
+  dateInRA?: Date | null
+) {
+  return createCoralPaymentLink({ lotId, cents, contract, cpf, dateInRA });
 }
 
 export async function getPaymentLink(linkId: string) {

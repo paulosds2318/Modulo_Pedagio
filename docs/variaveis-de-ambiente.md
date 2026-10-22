@@ -36,7 +36,7 @@ A integração recebe do Coral de 1 a 500 passagens por chamada. Cada registro d
 
 | Variável | O que configura | Quando usar |
 |---|---|---|
-| **ADYEN_API_KEY** | Credencial usada para criar links de pagamento e realizar cobranças. | Configure com a chave da Adyen. Vazia, desabilita as operações de pagamento Adyen. |
+| **ADYEN_API_KEY** | Credencial usada para consultar links Adyen e realizar cobranças em cartão tokenizado. | Configure com a chave da Adyen quando esses recursos forem usados. |
 | **ADYEN_MERCHANT_ACCOUNT** | Conta de comerciante usada nas operações e validada nas notificações. | Necessária junto com ADYEN_API_KEY. |
 | **ADYEN_ENVIRONMENT** | Ambiente da API: test ou live. | Padrão test. Somente live seleciona produção. |
 | **ADYEN_API_VERSION** | Versão do endpoint Checkout API. | Opcional; padrão v71. |
@@ -63,6 +63,16 @@ A integração recebe do Coral de 1 a 500 passagens por chamada. Cada registro d
 | Variável | O que configura | Quando usar |
 |---|---|---|
 | **CRON_SECRET** | Bearer que protege GET/POST /api/cron/regua, a rotina automática de cobrança. | Configure quando um agendador externo chamar a rota. Envie como Authorization: Bearer <segredo>. |
+
+## Links de pagamento via Coral/Foco
+
+| Variável | O que configura | Quando usar |
+|---|---|---|
+| **CORAL_PAY_BY_LINK_BASE_URL** | URL base da API de Pay By Link; padrão `https://servicescoral.aluguefoco.com.br`. | Só altere se o fornecedor disponibilizar outra base. |
+| **CORAL_PAY_BY_LINK_LOGIN** | Login usado em `POST /api/auth/login`. | Obrigatório para gerar links de pagamento. |
+| **CORAL_PAY_BY_LINK_PASSWORD** | Senha correspondente ao login. | Obrigatória; mantenha em segredo local ou no gerenciador de secrets do Render. |
+
+O módulo solicita um JWT ao endpoint de login e usa o token para chamar `POST /api/adyen-pay-by-link/v2/create`. O `reference` enviado é `LOTE_<id>`, e o valor em centavos é convertido para reais. O webhook da Adyen continua dependendo de `ADYEN_HMAC_KEY`. A API de criação informada retorna somente a URL; sem identificador do link, o módulo não consegue consultá-lo nem expirará-lo diretamente na Adyen.
 
 ## Seed de desenvolvimento
 

@@ -53,6 +53,14 @@ Como a compilação acontece na chegada, o Coral deve enviar juntas as passagens
 
 O Coral deve enviar datas com fuso horário, valores em centavos e o mesmo `idCoral` em todas as tentativas. A integração deve registrar falhas e permitir reenvio seguro. O segredo deve ser compartilhado por canal seguro e armazenado como variável de ambiente, nunca no código-fonte.
 
+## Criação do link de pagamento pela API Coral/Foco
+
+O módulo autentica em `POST /api/auth/login` com `CORAL_PAY_BY_LINK_LOGIN` e `CORAL_PAY_BY_LINK_PASSWORD`, reutiliza o JWT em memória e cria o link em `POST /api/adyen-pay-by-link/v2/create`. A base padrão é `https://servicescoral.aluguefoco.com.br` e pode ser ajustada por `CORAL_PAY_BY_LINK_BASE_URL`.
+
+O pedido usa `reference: "LOTE_<id>"`, CPF sem pontuação, valor convertido de centavos para reais, `typePayDue: "due"` e a data de retirada da locação como `dateInRA` quando disponível. Nome e e-mail não são enviados porque não fazem parte dos dados armazenados pelo módulo. A resposta documentada retorna somente `data.link`, que é salvo no lote e usado nas mensagens ao cliente.
+
+Como essa resposta não contém identificador do link, o módulo não consegue consultá-lo nem expirará-lo diretamente na Adyen. O webhook precisa chegar ao módulo com referência `LOTE_<id>` e assinatura HMAC válida. Enquanto um link sem identificador estiver ativo, o módulo suspende o débito automático D+5/D+10 para evitar cobrança duplicada; a API Coral/Foco precisará oferecer consulta/expiração para reabilitar essa proteção automaticamente.
+
 ## Fluxo desejado para atualização automática do pagamento
 
 1. O módulo cria e acompanha a cobrança do lote, associando-a a uma referência única, como `LOTE_<id-do-lote>`.
