@@ -3,7 +3,6 @@
 out/
 build/
 .env*
-!.env.example
 *.db
 *.db-journal
 *.tsbuildinfo
