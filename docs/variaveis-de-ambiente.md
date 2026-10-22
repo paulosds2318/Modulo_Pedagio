@@ -72,7 +72,7 @@ A integração recebe do Coral de 1 a 500 passagens por chamada. Cada registro d
 | **CORAL_PAY_BY_LINK_LOGIN** | Login usado em `POST /api/auth/login`. | Obrigatório para gerar links de pagamento. |
 | **CORAL_PAY_BY_LINK_PASSWORD** | Senha correspondente ao login. | Obrigatória; mantenha em segredo local ou no gerenciador de secrets do Render. |
 
-O módulo solicita um JWT ao endpoint de login e usa o token para chamar `POST /api/adyen-pay-by-link/v2/create`. O `reference` enviado é `LOTE_<id>`, e o valor em centavos é convertido para reais. O webhook da Adyen continua dependendo de `ADYEN_HMAC_KEY`. A API de criação informada retorna somente a URL; sem identificador do link, o módulo não consegue consultá-lo nem expirará-lo diretamente na Adyen.
+O módulo solicita um JWT ao endpoint de login, consulta o contrato em `GET /api/rentagreement/{numeroContrato}` e usa o token para chamar `POST /api/adyen-pay-by-link/v2/create`. O `reference` enviado é `LOTE_<id>`, e o valor em centavos é convertido para reais. O webhook da Adyen continua dependendo de `ADYEN_HMAC_KEY`. A API de criação informada retorna somente a URL; sem identificador do link, o módulo não consegue consultá-lo nem expirará-lo diretamente na Adyen.
 
 ## Seed de desenvolvimento
 
