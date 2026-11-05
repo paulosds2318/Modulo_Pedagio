@@ -53,6 +53,10 @@ Como a compilação acontece na chegada, o Coral deve enviar juntas as passagens
 
 O Coral deve enviar datas com fuso horário, valores em centavos e o mesmo `idCoral` em todas as tentativas. A integração deve registrar falhas e permitir reenvio seguro. O segredo deve ser compartilhado por canal seguro e armazenado como variável de ambiente, nunca no código-fonte.
 
+## Consulta de passagens pelo módulo (alternativa ao envio)
+
+Além de receber as passagens em `POST /api/passagens`, o módulo pode buscá-las no Coral em `GET /api/fleet/management/tag/public/events/conectcar/toll-data`, autenticando em `POST /api/auth/login`. A resposta deve trazer uma lista de passagens com exatamente os campos e formatos da tabela acima. O módulo valida cada registro com as mesmas regras do envio, importa os válidos, informa os rejeitados e compila automaticamente por contrato e CPF. A busca roda pelo cron diário e sob demanda na tela `/compilacao`. Os parâmetros de período (`startDate`/`endDate`) ainda precisam ser confirmados pelo Coral. Em homologação, a rota respondeu `503 Endpoint is not configured` em 05/11/2026.
+
 ## Criação do link de pagamento pela API Coral/Foco
 
 O módulo autentica em `POST /api/auth/login` com `CORAL_PAY_BY_LINK_LOGIN` e `CORAL_PAY_BY_LINK_PASSWORD`, reutiliza o JWT em memória, consulta os dados do contrato em `GET /api/rentagreement/{numeroContrato}` e então cria o link em `POST /api/adyen-pay-by-link/v2/create`. A base padrão é `https://servicescoral.aluguefoco.com.br` e pode ser ajustada por `CORAL_PAY_BY_LINK_BASE_URL`.

@@ -32,6 +32,17 @@ O banco usa volume persistente. Alterar POSTGRES_DB, POSTGRES_USER ou POSTGRES_P
 
 A integração recebe do Coral de 1 a 500 passagens por chamada. Cada registro deve conter idCoral (identificador único da passagem no Coral), numeroContrato, cpfCliente, placa, tag, praca, rodovia, dataHora, valorCentavos e lojaRetirada. telefoneCliente é opcional. Envie dataHora em formato ISO 8601 e valorCentavos como inteiro em centavos (por exemplo, R$ 12,34 = 1234). O banco possui uma restrição única para idCoral: reenvios são ignorados e contabilizados como duplicados, sem atualizar a passagem já recebida.
 
+## Consulta de passagens ConectCar no Coral
+
+| Variável | O que configura | Quando usar |
+|---|---|---|
+| **CORAL_TOLL_DATA_URL** | URL do endpoint `GET /api/fleet/management/tag/public/events/conectcar/toll-data` do Coral. Pode ser só a base, como `https://homologservicescoral.aluguefoco.com.br`. | Liga a sincronização manual e no cron. Sem ela, a sincronização fica desligada. |
+| **CORAL_TOLL_DATA_TOKEN** | Token fixo fornecido pelo Coral para a consulta de passagens, enviado como `Authorization: Bearer <token>`. | Opcional. Quando preenchido, o módulo não faz login; se o Coral recusar (401), a sincronização falha com aviso. Vazio, usa o login abaixo. |
+| **CORAL_TOLL_DATA_LOGIN** / **CORAL_TOLL_DATA_PASSWORD** | Credenciais do `POST /api/auth/login` na mesma origem da URL acima. | Opcionais; quando ausentes, usa `CORAL_PAY_BY_LINK_LOGIN` e `CORAL_PAY_BY_LINK_PASSWORD`. |
+| **CORAL_TOLL_DATA_LOOKBACK_DAYS** | Janela de dias enviada como `startDate`/`endDate` (`AAAA-MM-DD`). | Opcional; padrão 7, máximo 31 (limite do Coral). O Coral exige `startDate` e `endDate` juntos. |
+
+A resposta deve seguir o mesmo contrato de `POST /api/passagens` (os 10 campos obrigatórios, `valorCentavos` inteiro, `dataHora` ISO 8601 com fuso e CPF somente dígitos). Registros fora do contrato são rejeitados individualmente e listados na resposta da sincronização. O `idCoral` é usado sem alteração, então reenvios pelos dois caminhos não duplicam passagens.
+
 ## Adyen
 
 | Variável | O que configura | Quando usar |
