@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { createCoralPaymentLink } from "@/lib/services/coral-pay-by-link";
+import { createCoralPaymentLink } from "./services/coral-pay-by-link.ts";
 
 function config() {
   const key = process.env.ADYEN_API_KEY?.trim();

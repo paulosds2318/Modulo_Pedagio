@@ -38,6 +38,7 @@ export function CompilationPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState("");
   const [refreshError, setRefreshError] = useState("");
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetch("/api/passagens/pendentes")
@@ -105,6 +106,28 @@ export function CompilationPage() {
       setRefreshing(false);
     }
   }
+  async function syncFromCoral() {
+    setSyncing(true);
+    setRefreshNotice("Consultando passagens no Coral...");
+    setRefreshError("");
+    try {
+      const response = await fetch("/api/passagens/sincronizar", { method: "POST" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "Falha ao sincronizar com o Coral.");
+      setRefreshNotice(
+        `Coral: ${body.recebidas} recebidas, ${body.importadas} novas, ${body.duplicadas} já existentes, ` +
+        `${body.lotesCompilados} lote(s) compilado(s), ${body.rejeitadas} rejeitada(s) por dados inválidos.`
+      );
+      const refreshed = await fetch("/api/passagens/pendentes");
+      if (refreshed.ok) setAll(await refreshed.json());
+    } catch (cause) {
+      setRefreshNotice("");
+      setRefreshError(cause instanceof Error ? cause.message : "Falha ao sincronizar com o Coral.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function compile() {
     const feeValue = Number(fee.replace(",", "."));
     if (
@@ -172,6 +195,17 @@ export function CompilationPage() {
               <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+          {!isViewer && (
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => void syncFromCoral()}
+              disabled={syncing || loading}
+              title="Buscar passagens no Coral"
+            >
+              {syncing ? "Sincronizando..." : "Sincronizar Coral"}
+            </button>
+          )}
           <Link className="button secondary" href="/lotes">
             Ver lotes emitidos &rarr;
           </Link>
