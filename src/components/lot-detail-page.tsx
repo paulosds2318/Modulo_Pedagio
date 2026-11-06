@@ -177,8 +177,8 @@ export function LotDetailPage() {
           <h1>Lote #{lot.id} de Pedágios</h1>
           <p>
             Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível no Coral"}</span>
-            {" · "}CPF: {formatCpf(lot.cpfCliente)}
-            {" · "}Telefone: {lot.telefoneContato ? formatPhone(lot.telefoneContato) : "não disponível"}
+            {" · "}CPF: <span className="strong">{formatCpf(lot.cpfCliente)}</span>
+            {" · "}Telefone: <span className="strong">{lot.telefoneContato ? formatPhone(lot.telefoneContato) : "não disponível"}</span>
           </p>
           <p>
             Gerado em {new Date(lot.dataCriacao).toLocaleString("pt-BR")} · {lot.quantidadePassagens} passagem(ns) vinculada(s)
@@ -286,8 +286,12 @@ export function LotDetailPage() {
             <h2>Passagens Vinculadas ao Lote</h2>
             <p>
               Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível"}</span>
-              {" · "}CPF: {formatCpf(lot.cpfCliente)}
-              {lot.telefoneContato && ` · Telefone: ${formatPhone(lot.telefoneContato)}`}
+              {" · "}CPF: <span className="strong">{formatCpf(lot.cpfCliente)}</span>
+              {lot.telefoneContato && (
+                <>
+                  {" · "}Telefone: <span className="strong">{formatPhone(lot.telefoneContato)}</span>
+                </>
+              )}
             </p>
           </div>
         </div>
