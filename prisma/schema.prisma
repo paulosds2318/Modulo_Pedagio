@@ -46,6 +46,7 @@ model LoteCobranca {
   id                  Int                 @id @default(autoincrement())
   numeroContrato      String
   cpfCliente          String
+  nomeCliente         String?
   telefoneCliente     String?
   quantidadePassagens Int
   valorTotalCentavos  Int

@@ -95,7 +95,7 @@ export async function createCoralPaymentLink(input: {
   contract: string;
   cpf: string;
   dateInRA?: Date | null;
-}): Promise<{ id?: string; url: string }> {
+}): Promise<{ id?: string; url: string; nomeCliente?: string }> {
   if (input.cents <= 0) throw new Error("Valor do link deve ser maior que zero.");
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -150,8 +150,32 @@ export async function createCoralPaymentLink(input: {
     if (!response.ok || typeof data.link !== "string" || !data.link.startsWith("https://")) {
       throw new Error(`Coral Pay By Link falhou ao criar link (HTTP ${response.status}).`);
     }
-    return { url: data.link };
+    return { url: data.link, nomeCliente: customer.name };
   }
 
   throw new Error("Coral Pay By Link recusou a autenticação após renovar o token.");
+}
+
+/** Nome do cliente no contrato do Coral (GET /api/rentagreement/{contrato}); null se não encontrado. */
+export async function consultarNomeCliente(contract: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const token = await loginToCoral(attempt > 0);
+    const response = await fetch(`${RENT_AGREEMENT}/${encodeURIComponent(contract)}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.status === 401 && attempt === 0) {
+      cachedToken = null;
+      continue;
+    }
+    if (!response.ok) return null;
+    const result = await readJson(response);
+    const rawData = result.data ?? result;
+    const data = Array.isArray(rawData) ? record(rawData[0]) : record(rawData);
+    const agreement = record(data.rentAgreement ?? data.rentagreement ?? data.contrato ?? data);
+    const customer = record(agreement.customer ?? agreement.customerData ?? agreement.client ?? agreement.cliente ?? agreement.locatario);
+    return firstString(agreement.customerName, agreement.nomeCliente, customer.name, customer.nome, customer.fullName, customer.nomeCompleto) ?? null;
+  }
+  return null;
 }

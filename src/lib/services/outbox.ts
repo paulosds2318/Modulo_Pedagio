@@ -47,7 +47,7 @@ export async function processIntegrationOutbox(now = new Date(), loteId?: number
           const rental = await db.contratoLocacao.findUnique({ where: { numeroContrato: lot.numeroContrato }, select: { dataRetirada: true } });
           const link = await createPaymentLink(lot.id, lot.valorFinalCentavos, lot.numeroContrato, lot.cpfCliente, rental?.dataRetirada);
           if (!link?.url) throw new Error("Coral Pay By Link não retornou a URL do pagamento.");
-          await db.loteCobranca.update({ where: { id: lot.id }, data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url } });
+          await db.loteCobranca.update({ where: { id: lot.id }, data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url, ...(link.nomeCliente ? { nomeCliente: link.nomeCliente } : {}) } });
           await db.logRegua.create({ data: { loteId: lot.id, etapa: "D0", acao: "CRIAR_PAY_BY_LINK", canal: "Coral/Foco", resultado: "SUCESSO", detalhesResposta: "Link de pagamento solicitado à API Coral/Foco." } });
         }
       } else if (job.tipo === "WHATSAPP_D0") {
