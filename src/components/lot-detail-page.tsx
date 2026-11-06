@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { formatCpf, formatPhone } from "@/lib/pii";
 type Entry = {
   id: number;
   etapa: string;
@@ -16,6 +17,7 @@ type Lot = {
   numeroContrato: string;
   cpfCliente: string;
   nomeCliente: string | null;
+  telefoneContato: string | null;
   telefoneCliente: string | null;
   quantidadePassagens: number;
   valorTotalCentavos: number;
@@ -41,13 +43,6 @@ const money = (c: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     c / 100
   );
-const maskCpf = (cpf: string) => {
-  const digits = cpf.replace(/\D/g, "");
-  if (digits.length === 11) {
-    return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
-  }
-  return cpf;
-};
 const stages = [
   { key: "D0", label: "D+0: Emissão e Link Adyen", desc: "Envio de link Pay-by-link via e-mail e WhatsApp" },
   { key: "D5", label: "D+5: 1ª Tentativa no Cartão", desc: "Débito automático no cartão tokenizado (Coral)" },
@@ -182,7 +177,8 @@ export function LotDetailPage() {
           <h1>Lote #{lot.id} de Pedágios</h1>
           <p>
             Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível no Coral"}</span>
-            {" · "}CPF: {maskCpf(lot.cpfCliente)}
+            {" · "}CPF: {formatCpf(lot.cpfCliente)}
+            {" · "}Telefone: {lot.telefoneContato ? formatPhone(lot.telefoneContato) : "não disponível"}
           </p>
           <p>
             Gerado em {new Date(lot.dataCriacao).toLocaleString("pt-BR")} · {lot.quantidadePassagens} passagem(ns) vinculada(s)
@@ -290,8 +286,8 @@ export function LotDetailPage() {
             <h2>Passagens Vinculadas ao Lote</h2>
             <p>
               Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível"}</span>
-              {" · "}CPF: {maskCpf(lot.cpfCliente)}
-              {lot.telefoneCliente && ` · Telefone: ${lot.telefoneCliente}`}
+              {" · "}CPF: {formatCpf(lot.cpfCliente)}
+              {lot.telefoneContato && ` · Telefone: ${formatPhone(lot.telefoneContato)}`}
             </p>
           </div>
         </div>
