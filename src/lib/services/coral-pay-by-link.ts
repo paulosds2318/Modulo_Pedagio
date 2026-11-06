@@ -36,6 +36,7 @@ function agreementCustomer(result: ApiObject, fallbackDate?: Date | null) {
     agreement.documentNumber, agreement.cpfCliente, agreement.cpf, agreement.clientDocumentNumber,
     customer.documentNumber, customer.cpf, customer.cpfCliente, nestedCustomer.documentNumber, nestedCustomer.cpf
   );
+  const phone = firstString(customer.phone1, customer.phone2, customer.phone, nestedCustomer.phone1, nestedCustomer.phone);
   const agreementDate = firstString(agreement.dateInRA, agreement.dataRetirada, agreement.startDate);
   const parsedDate = agreementDate ? new Date(agreementDate) : fallbackDate;
   const dateInRA = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : undefined;
@@ -43,7 +44,7 @@ function agreementCustomer(result: ApiObject, fallbackDate?: Date | null) {
   if (!name || !email) {
     throw new Error("Consulta do contrato no Coral não retornou nome e e-mail do cliente.");
   }
-  return { name, email, documentNumber, dateInRA };
+  return { name, email, documentNumber, dateInRA, phone };
 }
 
 async function readJson(response: Response): Promise<ApiObject> {
@@ -95,7 +96,7 @@ export async function createCoralPaymentLink(input: {
   contract: string;
   cpf: string;
   dateInRA?: Date | null;
-}): Promise<{ id?: string; url: string; nomeCliente?: string }> {
+}): Promise<{ id?: string; url: string; nomeCliente?: string; telefoneContato?: string }> {
   if (input.cents <= 0) throw new Error("Valor do link deve ser maior que zero.");
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -150,14 +151,14 @@ export async function createCoralPaymentLink(input: {
     if (!response.ok || typeof data.link !== "string" || !data.link.startsWith("https://")) {
       throw new Error(`Coral Pay By Link falhou ao criar link (HTTP ${response.status}).`);
     }
-    return { url: data.link, nomeCliente: customer.name };
+    return { url: data.link, nomeCliente: customer.name, telefoneContato: customer.phone };
   }
 
   throw new Error("Coral Pay By Link recusou a autenticação após renovar o token.");
 }
 
-/** Nome do cliente no contrato do Coral (GET /api/rentagreement/{contrato}); null se não encontrado. */
-export async function consultarNomeCliente(contract: string): Promise<string | null> {
+/** Nome e telefone do cliente no contrato do Coral (GET /api/rentagreement/{contrato}); null se não encontrado. */
+export async function consultarContatoCliente(contract: string): Promise<{ nome: string | null; telefone: string | null } | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = await loginToCoral(attempt > 0);
     const response = await fetch(`${RENT_AGREEMENT}/${encodeURIComponent(contract)}`, {
@@ -175,7 +176,10 @@ export async function consultarNomeCliente(contract: string): Promise<string | n
     const data = Array.isArray(rawData) ? record(rawData[0]) : record(rawData);
     const agreement = record(data.rentAgreement ?? data.rentagreement ?? data.contrato ?? data);
     const customer = record(agreement.customer ?? agreement.customerData ?? agreement.client ?? agreement.cliente ?? agreement.locatario);
-    return firstString(agreement.customerName, agreement.nomeCliente, customer.name, customer.nome, customer.fullName, customer.nomeCompleto) ?? null;
+    return {
+      nome: firstString(agreement.customerName, agreement.nomeCliente, customer.name, customer.nome, customer.fullName, customer.nomeCompleto) ?? null,
+      telefone: firstString(customer.phone1, customer.phone2, customer.phone) ?? null,
+    };
   }
   return null;
 }

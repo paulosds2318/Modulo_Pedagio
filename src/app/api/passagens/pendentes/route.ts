@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getServerSession, hasRole } from "@/lib/auth";
-import { maskCpf, maskPhone } from "@/lib/pii";
+import { getServerSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -14,11 +13,7 @@ export async function GET() {
       where: { loteId: null },
       orderBy: { dataHora: "desc" },
     });
-    return NextResponse.json(hasRole(session, "admin") ? passages : passages.map((passage) => ({
-      ...passage,
-      cpfCliente: maskCpf(passage.cpfCliente),
-      telefoneCliente: maskPhone(passage.telefoneCliente),
-    })));
+    return NextResponse.json(passages);
   } catch {
     return NextResponse.json({ error: "Banco de dados indispon?vel." }, { status: 503 });
   }

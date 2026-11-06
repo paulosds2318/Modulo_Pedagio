@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatCpf } from "@/lib/pii";
 import { useEffect, useState, useCallback } from "react";
 
 type Lot = {
@@ -31,13 +32,6 @@ const money = (c: number) =>
     c / 100
   );
 
-const maskCpf = (cpf: string) => {
-  const digits = cpf.replace(/\D/g, "");
-  if (digits.length === 11) {
-    return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
-  }
-  return cpf;
-};
 
 export function LotsPage() {
   const [lots, setLots] = useState<Lot[]>([]);
@@ -322,7 +316,7 @@ export function LotsPage() {
                     <td>
                       <span className="strong">{l.numeroContrato}</span>
                     </td>
-                    <td>{l.cpfCliente ? maskCpf(l.cpfCliente) : "—"}</td>
+                    <td>{l.cpfCliente ? formatCpf(l.cpfCliente) : "—"}</td>
                     <td>{l.quantidadePassagens} pedágio(s)</td>
                     <td className="strong">{money(l.valorFinalCentavos)}</td>
                     <td>

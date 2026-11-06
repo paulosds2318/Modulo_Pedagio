@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession, hasRole } from "@/lib/auth";
-import { maskCpf, maskName, maskPhone } from "@/lib/pii";
-import { consultarNomeCliente } from "@/lib/services/coral-pay-by-link";
+import { consultarContatoCliente } from "@/lib/services/coral-pay-by-link";
 
 export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
@@ -24,26 +23,24 @@ export async function GET(_request: Request, context: RouteContext) {
         logs: { orderBy: { dataHora: "desc" } },
       },
     });
-    // Lotes anteriores ao campo nomeCliente: busca o nome no contrato do Coral uma vez e grava.
-    if (lot && !lot.nomeCliente) {
-      const nome = await consultarNomeCliente(lot.numeroContrato).catch(() => null);
-      if (nome) {
-        await db.loteCobranca.update({ where: { id: lot.id }, data: { nomeCliente: nome } });
-        lot.nomeCliente = nome;
+    // Lotes sem nome/telefone de contato: busca no contrato do Coral e grava o que faltar.
+    if (lot && (!lot.nomeCliente || !lot.telefoneContato)) {
+      const contato = await consultarContatoCliente(lot.numeroContrato).catch(() => null);
+      const data = {
+        ...(!lot.nomeCliente && contato?.nome ? { nomeCliente: contato.nome } : {}),
+        ...(!lot.telefoneContato && contato?.telefone ? { telefoneContato: contato.telefone } : {}),
+      };
+      if (Object.keys(data).length) {
+        await db.loteCobranca.update({ where: { id: lot.id }, data });
+        Object.assign(lot, data);
       }
     }
     const isAdmin = hasRole(session, "admin");
     return lot
+      // Nome, CPF e telefone completos para todos os perfis (os analistas já os veem no Coral);
+      // apenas o detalhe técnico das integrações fica restrito a administradores.
       ? NextResponse.json(isAdmin ? lot : {
           ...lot,
-          cpfCliente: maskCpf(lot.cpfCliente),
-          nomeCliente: maskName(lot.nomeCliente),
-          telefoneCliente: maskPhone(lot.telefoneCliente),
-          passagens: lot.passagens.map((passage) => ({
-            ...passage,
-            cpfCliente: maskCpf(passage.cpfCliente),
-            telefoneCliente: maskPhone(passage.telefoneCliente),
-          })),
           logs: lot.logs.map((log) => ({ ...log, detalhesResposta: "Detalhes disponíveis apenas para administradores." })),
         })
       : NextResponse.json({ error: "Lote nao encontrado." }, { status: 404 });

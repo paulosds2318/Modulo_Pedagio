@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getServerSession, hasRole } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import { isCalendarDate, saoPauloDateRange } from "@/lib/date-range";
-import { maskCpf, maskPhone } from "@/lib/pii";
 
 export const runtime = "nodejs";
 
@@ -32,6 +31,9 @@ export async function GET(request: Request) {
     where.OR = [
       { numeroContrato: { contains: search, mode: "insensitive" } },
       { cpfCliente: { contains: search } },
+      // CPF digitado com pontuação (123.456.789-01) também encontra o lote.
+      ...(/\d{3}/.test(search) && /[.\-]/.test(search) ? [{ cpfCliente: { contains: search.replace(/\D/g, "") } }] : []),
+      { nomeCliente: { contains: search, mode: "insensitive" } },
       ...(Number.isFinite(searchNum) ? [{ id: searchNum }] : []),
     ];
   }
@@ -48,11 +50,7 @@ export async function GET(request: Request) {
       }),
     ]);
     return NextResponse.json({
-      data: hasRole(session, "admin") ? lots : lots.map((lot) => ({
-        ...lot,
-        cpfCliente: maskCpf(lot.cpfCliente),
-        telefoneCliente: maskPhone(lot.telefoneCliente),
-      })),
+      data: lots,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     });
   } catch {

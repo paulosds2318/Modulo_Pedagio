@@ -1,7 +1,27 @@
+/** CPF completo formatado para exibição: "123.456.789-01". */
+export function formatCpf(value: string | null | undefined) {
+  if (!value) return value;
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 11 ? `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}` : value;
+}
+
 export function maskCpf(value: string | null | undefined) {
   if (!value) return value;
   const digits = value.replace(/\D/g, "");
   return digits.length === 11 ? `${digits.slice(0, 3)}.***.***-${digits.slice(9)}` : "***";
+}
+
+/** Formata telefone brasileiro para exibição: "+55 (81) 98738-5401". Aceita o formato do Coral ("0" + 55 + DDD + número). */
+export function formatPhone(value: string | null | undefined) {
+  if (!value) return value;
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("055")) digits = digits.slice(1);
+  if (!digits.startsWith("55") && (digits.length === 10 || digits.length === 11)) digits = `55${digits}`;
+  if (!digits.startsWith("55") || (digits.length !== 12 && digits.length !== 13)) return value;
+  const ddd = digits.slice(2, 4);
+  const number = digits.slice(4);
+  const split = number.length - 4;
+  return `+55 (${ddd}) ${number.slice(0, split)}-${number.slice(split)}`;
 }
 
 export function maskPhone(value: string | null | undefined) {

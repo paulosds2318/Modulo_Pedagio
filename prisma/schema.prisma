@@ -47,6 +47,7 @@ model LoteCobranca {
   numeroContrato      String
   cpfCliente          String
   nomeCliente         String?
+  telefoneContato     String?
   telefoneCliente     String?
   quantidadePassagens Int
   valorTotalCentavos  Int
