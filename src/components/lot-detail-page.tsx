@@ -15,6 +15,7 @@ type Lot = {
   id: number;
   numeroContrato: string;
   cpfCliente: string;
+  nomeCliente: string | null;
   telefoneCliente: string | null;
   quantidadePassagens: number;
   valorTotalCentavos: number;
@@ -180,6 +181,10 @@ export function LotDetailPage() {
           <span className="eyebrow">Contrato Coral: {lot.numeroContrato}</span>
           <h1>Lote #{lot.id} de Pedágios</h1>
           <p>
+            Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível no Coral"}</span>
+            {" · "}CPF: {maskCpf(lot.cpfCliente)}
+          </p>
+          <p>
             Gerado em {new Date(lot.dataCriacao).toLocaleString("pt-BR")} · {lot.quantidadePassagens} passagem(ns) vinculada(s)
             {lot.dataPagamento && ` · Pago em ${new Date(lot.dataPagamento).toLocaleString("pt-BR")}`}
           </p>
@@ -284,7 +289,8 @@ export function LotDetailPage() {
           <div>
             <h2>Passagens Vinculadas ao Lote</h2>
             <p>
-              Cliente CPF: <span className="strong">{maskCpf(lot.cpfCliente)}</span>
+              Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível"}</span>
+              {" · "}CPF: {maskCpf(lot.cpfCliente)}
               {lot.telefoneCliente && ` · Telefone: ${lot.telefoneCliente}`}
             </p>
           </div>

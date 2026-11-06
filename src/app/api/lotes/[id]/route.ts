@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession, hasRole } from "@/lib/auth";
-import { maskCpf, maskPhone } from "@/lib/pii";
+import { maskCpf, maskName, maskPhone } from "@/lib/pii";
+import { consultarNomeCliente } from "@/lib/services/coral-pay-by-link";
 
 export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
@@ -23,11 +24,20 @@ export async function GET(_request: Request, context: RouteContext) {
         logs: { orderBy: { dataHora: "desc" } },
       },
     });
+    // Lotes anteriores ao campo nomeCliente: busca o nome no contrato do Coral uma vez e grava.
+    if (lot && !lot.nomeCliente) {
+      const nome = await consultarNomeCliente(lot.numeroContrato).catch(() => null);
+      if (nome) {
+        await db.loteCobranca.update({ where: { id: lot.id }, data: { nomeCliente: nome } });
+        lot.nomeCliente = nome;
+      }
+    }
     const isAdmin = hasRole(session, "admin");
     return lot
       ? NextResponse.json(isAdmin ? lot : {
           ...lot,
           cpfCliente: maskCpf(lot.cpfCliente),
+          nomeCliente: maskName(lot.nomeCliente),
           telefoneCliente: maskPhone(lot.telefoneCliente),
           passagens: lot.passagens.map((passage) => ({
             ...passage,

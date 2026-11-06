@@ -186,7 +186,7 @@ async function tryCardCharge(
         if (link?.url) {
           await db.loteCobranca.update({
             where: { id: fresh.id },
-            data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url },
+            data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url, ...(link.nomeCliente ? { nomeCliente: link.nomeCliente } : {}) },
           });
           await addLog(
             fresh.id,
