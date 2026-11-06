@@ -17,10 +17,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sincronização com o Coral não configurada (CORAL_TOLL_DATA_URL)." }, { status: 503 });
   }
 
+  // Corpo opcional {startDate, endDate} (AAAA-MM-DD, até 31 dias); sem corpo, usa os últimos N dias.
+  const body = (await request.json().catch(() => null)) as { startDate?: unknown; endDate?: unknown } | null;
+  const periodo = {
+    startDate: typeof body?.startDate === "string" ? body.startDate : undefined,
+    endDate: typeof body?.endDate === "string" ? body.endDate : undefined,
+  };
+
   try {
-    return NextResponse.json(await sincronizarPassagensCoral());
+    return NextResponse.json(await sincronizarPassagensCoral(new Date(), periodo));
   } catch (error) {
-    const message = error instanceof Error ? error.message.replace(/^CONFIG:\s*/, "") : "Falha ao sincronizar passagens do Coral.";
-    return NextResponse.json({ error: message }, { status: 502 });
+    const raw = error instanceof Error ? error.message : "Falha ao sincronizar passagens do Coral.";
+    if (raw.startsWith("PERIODO:")) return NextResponse.json({ error: raw.replace(/^PERIODO:\s*/, "") }, { status: 400 });
+    return NextResponse.json({ error: raw.replace(/^CONFIG:\s*/, "") }, { status: 502 });
   }
 }
