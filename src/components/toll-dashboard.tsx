@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { OperationPanel } from "@/components/operation-panel";
 
 type Lot = {
   id: number;
@@ -51,6 +52,7 @@ export function TollDashboard() {
   const [error, setError] = useState("");
   const [refreshNotice, setRefreshNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [panelKey, setPanelKey] = useState(0);
 
   // Filtros rápidos da Visão Geral
   const [search, setSearch] = useState("");
@@ -75,6 +77,7 @@ export function TollDashboard() {
 
   async function refreshDashboard() {
     setLoading(true);
+    setPanelKey((k) => k + 1);
     setError("");
     setRefreshNotice("");
     try {
@@ -175,6 +178,8 @@ export function TollDashboard() {
           </small>
         </article>
       </section>
+
+      <OperationPanel refreshKey={panelKey} />
 
       <section className="panel">
         <div className="panel-head" style={{ flexWrap: "wrap", gap: "16px" }}>
