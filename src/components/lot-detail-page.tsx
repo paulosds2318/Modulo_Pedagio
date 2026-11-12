@@ -77,7 +77,6 @@ export function LotDetailPage() {
   const [cancelando, setCancelando] = useState(false);
   const [cancelErro, setCancelErro] = useState("");
   const [cancelamento, setCancelamento] = useState({ motivo: "CONTESTACAO", observacao: "" });
-  const [gerandoLink, setGerandoLink] = useState(false);
   const [lot, setLot] = useState<Lot | null>(null);
   const [prazos, setPrazos] = useState<PrazosRegua>(PRAZOS_PADRAO);
   const stages = buildStages(prazos);
@@ -165,27 +164,6 @@ export function LotDetailPage() {
       setBaixaErro(cause instanceof Error ? cause.message : "Erro ao registrar a baixa.");
     } finally {
       setSalvandoBaixa(false);
-    }
-  }
-
-  async function gerarNovoLink() {
-    if (!lot) return;
-    const aviso = lot.adyenPaymentUrl
-      ? `Gerar um novo link de pagamento com o mesmo valor (${money(lot.valorFinalCentavos)})? Use quando o link anterior aparecer como expirado ou não abrir. Se o anterior ainda estiver válido, o cliente ficará com dois links ativos.`
-      : `Gerar o link de pagamento deste lote (${money(lot.valorFinalCentavos)})?`;
-    if (!window.confirm(aviso)) return;
-    setGerandoLink(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/lotes/${params.id}/novo-link`, { method: "POST" });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || "Não foi possível gerar o novo link.");
-      await reload();
-      setQueryMessage(`Novo link gerado com o mesmo valor (${money(lot.valorFinalCentavos)}). Use o botão Abrir Link para conferir e enviar ao cliente.`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Erro ao gerar o novo link.");
-    } finally {
-      setGerandoLink(false);
     }
   }
 
@@ -528,11 +506,6 @@ export function LotDetailPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {isAdmin && (lot.status === "EM_REGUA" || lot.status === "INADIMPLENTE") && (
-              <button type="button" className="button secondary" onClick={() => void gerarNovoLink()} disabled={gerandoLink}>
-                {gerandoLink ? "Gerando…" : lot.adyenPaymentUrl ? `Gerar novo link (${money(lot.valorFinalCentavos)})` : "Gerar link"}
-              </button>
-            )}
             {lot.adyenPaymentUrl && lot.status !== "PAGO" && lot.status !== "CANCELADO" && (
               <a className="button primary" href={lot.adyenPaymentUrl} target="_blank" rel="noreferrer">
                 Abrir Link Adyen (Pay-by-Link) ↗
@@ -540,11 +513,6 @@ export function LotDetailPage() {
             )}
           </div>
         </div>
-        {isAdmin && lot.adyenPaymentUrl && (lot.status === "EM_REGUA" || lot.status === "INADIMPLENTE") && (
-          <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>
-            Se o cliente abrir o link e aparecer &quot;Reserva expirada&quot;, gere um novo link: ele sai com o mesmo valor e fica registrado no histórico.
-          </p>
-        )}
         <div className="timeline">
           {stages.map((stg) => {
             const isDone = logStages.has(stg.key) || lot.etapaRegua === stg.key;
