@@ -4,6 +4,7 @@ export const ACOES_AUDITORIA: Record<string, string> = {
   COMPILAR_LOTE: "Compilou lote manualmente",
   BAIXA_MANUAL: "Registrou baixa manual de lote",
   CANCELAR_LOTE: "Cancelou lote",
+  GERAR_NOVO_LINK: "Gerou novo link de pagamento",
   CONSULTAR_ADYEN: "Consultou status na Adyen",
   SINCRONIZAR_CORAL: "Sincronizou passagens com o Coral",
   EXPORTAR_RELATORIO: "Exportou relatório do painel",

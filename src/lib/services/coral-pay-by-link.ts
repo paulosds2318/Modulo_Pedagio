@@ -90,12 +90,30 @@ async function loginToCoral(force = false): Promise<string> {
   }
 }
 
+/**
+ * Data enviada em `dateInRA`. O checkout trata o link como uma "reserva" para essa data e o mostra como
+ * "Reserva expirada" quando ela já passou. Para cobrança de pedágio (sempre depois da locação), enviar a
+ * data de retirada faz o link nascer expirado. Por isso o padrão é "validade": emissão + N dias.
+ * CORAL_PAY_BY_LINK_DATA_REFERENCIA: "validade" (padrão) | "emissao" | "retirada" (comportamento antigo).
+ * CORAL_PAY_BY_LINK_VALIDADE_DIAS: dias somados à emissão no modo "validade" (padrão 15, de 1 a 60).
+ */
+export function dataReferenciaLink(dataRetirada?: string, now = new Date()): string | undefined {
+  const modo = process.env.CORAL_PAY_BY_LINK_DATA_REFERENCIA?.trim().toLowerCase() || "validade";
+  if (modo === "retirada") return dataRetirada;
+  if (modo === "emissao") return now.toISOString();
+  const dias = Number(process.env.CORAL_PAY_BY_LINK_VALIDADE_DIAS);
+  const validade = Number.isInteger(dias) && dias >= 1 && dias <= 60 ? dias : 15;
+  return new Date(now.getTime() + validade * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export async function createCoralPaymentLink(input: {
   lotId: number;
   cents: number;
   contract: string;
   cpf: string;
   dateInRA?: Date | null;
+  /** 1 no primeiro link do lote; 2, 3… para links novos (cada versão usa uma chave de idempotência própria). */
+  versao?: number;
 }): Promise<{ id?: string; url: string; nomeCliente?: string; telefoneContato?: string }> {
   if (input.cents <= 0) throw new Error("Valor do link deve ser maior que zero.");
 
@@ -125,7 +143,7 @@ export async function createCoralPaymentLink(input: {
       documentNumber: (customer.documentNumber ?? input.cpf).replace(/\D/g, ""),
       customerName: customer.name,
       customerEmail: customer.email,
-      ...(customer.dateInRA ? { dateInRA: customer.dateInRA } : {}),
+      ...(dataReferenciaLink(customer.dateInRA) ? { dateInRA: dataReferenciaLink(customer.dateInRA) } : {}),
       typePayDue: "due",
     };
     const response = await fetch(CREATE_LINK, {
@@ -134,7 +152,7 @@ export async function createCoralPaymentLink(input: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         Accept: "application/json",
-        "Idempotency-Key": `foco-toll-lot-${input.lotId}-link-v1`,
+        "Idempotency-Key": `foco-toll-lot-${input.lotId}-link-v${input.versao ?? 1}`,
       },
       body: JSON.stringify(body),
       cache: "no-store",

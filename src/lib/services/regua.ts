@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
-import { chargeStoredPaymentMethod, createPaymentLink, expirePaymentLink } from "@/lib/adyen";
+import { chargeStoredPaymentMethod, expirePaymentLink } from "@/lib/adyen";
 import { getStoredPaymentMethod } from "@/lib/services/coral";
 import { buildPaymentMessage, sendWhatsAppMessage } from "@/lib/services/whatsapp";
 import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { gerarNovoLink } from "@/lib/services/novo-link";
 import { rotuloEtapa } from "@/lib/regua-config";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -199,31 +200,9 @@ async function tryCardCharge(
 
       // Gera novo Pay-by-link para o cliente pagar manualmente após recusa do cartão
       try {
-        const rental = await db.contratoLocacao.findUnique({ where: { numeroContrato: fresh.numeroContrato }, select: { dataRetirada: true } });
-        const link = await createPaymentLink(fresh.id, fresh.valorFinalCentavos, fresh.numeroContrato, fresh.cpfCliente, rental?.dataRetirada);
-        if (link?.url) {
-          await db.loteCobranca.update({
-            where: { id: fresh.id },
-            data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url, ...(link.nomeCliente ? { nomeCliente: link.nomeCliente } : {}), ...(link.telefoneContato ? { telefoneContato: link.telefoneContato } : {}) },
-          });
-          await addLog(
-            fresh.id,
-            stage,
-            "CRIAR_NOVO_LINK",
-            "Coral/Foco",
-            "SUCESSO",
-            "Novo link de pagamento solicitado à API Coral/Foco após recusa do cartão."
-          );
-        }
-      } catch (error) {
-        await addLog(
-          fresh.id,
-          stage,
-          "CRIAR_NOVO_LINK",
-          "Adyen",
-          "FALHA",
-          error instanceof Error ? error.message : "Falha ao gerar novo link."
-        );
+        await gerarNovoLink(fresh.id, stage, "Novo link de pagamento solicitado à API Coral/Foco após recusa do cartão.");
+      } catch {
+        // A falha já fica registrada no histórico do lote pelo próprio gerarNovoLink.
       }
       return "DECLINED";
     }
