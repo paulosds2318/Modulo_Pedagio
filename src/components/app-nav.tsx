@@ -100,12 +100,6 @@ export function AppNav() {
           Visão geral
         </Link>
         <Link
-          href="/painel"
-          className={`nav-link ${pathname.startsWith("/painel") ? "active" : ""}`}
-        >
-          Painel
-        </Link>
-        <Link
           href="/compilacao"
           className={`nav-link ${pathname.startsWith("/compilacao") ? "active" : ""}`}
         >
@@ -116,6 +110,12 @@ export function AppNav() {
           className={`nav-link ${pathname.startsWith("/lotes") ? "active" : ""}`}
         >
           Lotes e cobranças
+        </Link>
+        <Link
+          href="/painel"
+          className={`nav-link ${pathname.startsWith("/painel") ? "active" : ""}`}
+        >
+          Painel
         </Link>
         {isAdmin && (
           <Link
