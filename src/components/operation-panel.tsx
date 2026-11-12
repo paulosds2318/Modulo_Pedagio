@@ -46,11 +46,11 @@ const money = (c: number) => new Intl.NumberFormat("pt-BR", { style: "currency",
 const dateTime = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
 const ETAPAS: Record<string, { rotulo: string; descricao: string; cor: string }> = {
-  D0: { rotulo: "D+0", descricao: "Link emitido", cor: "var(--foco-teal)" },
-  D5: { rotulo: "D+5", descricao: "1ª tentativa no cartão", cor: "var(--foco-purple)" },
-  D7: { rotulo: "D+7", descricao: "Lembrete", cor: "var(--foco-amber)" },
-  D10: { rotulo: "D+10", descricao: "2ª tentativa no cartão", cor: "var(--foco-graphite)" },
-  INADIMPLENTE: { rotulo: "Inadimplente", descricao: "Régua encerrada sem pagamento", cor: "var(--foco-red)" },
+  D0: { rotulo: "D+0", descricao: "Cobrança inicial (link de 48 h)", cor: "var(--foco-teal)" },
+  D5: { rotulo: "D+2", descricao: "1ª tentativa no cartão / nova cobrança", cor: "var(--foco-purple)" },
+  D7: { rotulo: "D+5", descricao: "Última cobrança com link", cor: "var(--foco-amber)" },
+  D10: { rotulo: "D+7", descricao: "2ª tentativa no cartão", cor: "var(--foco-graphite)" },
+  INADIMPLENTE: { rotulo: "Tratamento manual", descricao: "Régua encerrada sem pagamento (extrajudicial)", cor: "var(--foco-red)" },
   PAGO: { rotulo: "Pago", descricao: "Liquidados", cor: "var(--foco-green)" },
   CANCELADO: { rotulo: "Cancelado", descricao: "Gerados por engano, contestados ou isentos", cor: "var(--muted-light)" },
 };

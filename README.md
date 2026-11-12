@@ -1,6 +1,6 @@
 # Toll Manager App
 
-Aplicação TypeScript/Next.js para organizar passagens de pedágio, compilar lotes e acompanhar uma régua D+0/D+5/D+7/D+10. Usa Prisma e PostgreSQL, adequada para rodar em container ou hospedagem web.
+Aplicação TypeScript/Next.js para organizar passagens de pedágio, compilar lotes e acompanhar uma régua D+0/D+2/D+5/D+7 com links de pagamento de 48 h. Usa Prisma e PostgreSQL, adequada para rodar em container ou hospedagem web.
 
 ## Rodar localmente
 
@@ -42,7 +42,8 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 - `/lotes`: busca e filtro por status.
 - `/lotes/[id]`: detalhes, passagens, link, eventos da régua e consulta sob demanda do status Adyen.
 - `/painel`: painel de acompanhamento por período, loja, situação e etapa, com comparação ao período anterior, gráfico, tabela por loja, funil da régua, saúde das integrações (inclui a última sincronização com o Coral) e exportação em Excel.
-- `/configuracoes/regua` (administradores): prazos da régua em dias após a emissão (padrão D+5, D+7 e D+10), usados pela rotina diária.
+- `/configuracoes/regua` (administradores): prazos da régua em dias após a emissão (padrão D+2, D+5 e D+7) e validade do link de pagamento (padrão 48 h), usados pela rotina automática.
+- `/tratamento-manual`: lotes que passaram por toda a régua sem pagamento (aviso de cobrança extrajudicial), para negociação e baixa manual.
 - `/auditoria` (somente o administrador master): registro de compilações manuais, consultas à Adyen, sincronizações manuais, exportações, alterações de prazos e de usuários.
 
 ## Integrações e contratos canônicos
@@ -52,7 +53,7 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 - `POST /api/passagens`: recebe do Coral de 1 a 500 passagens no formato `{idCoral, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer CORAL_PASSAGES_SYNC_SECRET`. Após importar, compila automaticamente as passagens pendentes daquele envio, agrupadas por contrato e CPF, e inicia a etapa D+0. `idCoral` é único; reenvios não duplicam passagens nem lotes já criados. Se um grupo for inválido, ele permanece pendente e a resposta informa a falha para permitir correção e compilação manual. `valorCentavos` deve ser inteiro em centavos.
 - `POST /api/passagens/sincronizar`: busca passagens no Coral em `GET /api/fleet/management/tag/public/events/conectcar/toll-data` (configurada por `CORAL_TOLL_DATA_URL`). O Coral deve devolver o mesmo contrato de `POST /api/passagens` (todos os campos obrigatórios, `valorCentavos` inteiro, `dataHora` com fuso, CPF só dígitos); registros fora do contrato são rejeitados e informados na resposta. O `idCoral` é preservado, então a mesma passagem recebida pelos dois caminhos não duplica. Aceita sessão de administrador ou `Authorization: Bearer CRON_SECRET`; também roda no cron diário e pelo botão "Sincronizar Coral" em `/compilacao`. Sem corpo, busca os últimos `CORAL_TOLL_DATA_LOOKBACK_DAYS` dias (padrão 7); para recuperar um período passado, envie `{"startDate":"AAAA-MM-DD","endDate":"AAAA-MM-DD"}` (até 31 dias, limite do Coral). Todas as páginas da resposta (`{data:{total,page,pageSize,data}}`) são lidas.
 - `POST /api/lotes/compilar`: cria o lote e grava tarefas D+0 numa outbox persistente. Tenta executá-las imediatamente; falhas temporárias são repetidas pelo cron com espera crescente e até 10 tentativas. Tarefas sem configuração de integração aguardam configuração e são verificadas diariamente.
-- Rotina automática: com `AGENDADOR_INTERNO=true` o próprio módulo roda a rotina a cada `AGENDADOR_INTERVALO_MIN` minutos (padrão 60), sem configurar nada na AWS. Alternativa: chamar `GET` ou `POST /api/cron/regua` com `Authorization: Bearer CRON_SECRET` (cron-job.org, EventBridge…). Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
+- Rotina automática: com `AGENDADOR_INTERNO=true` o próprio módulo roda a rotina a cada `AGENDADOR_INTERVALO_MIN` minutos (padrão 60), sem configurar nada na AWS. Alternativa: chamar `GET` ou `POST /api/cron/regua` com `Authorization: Bearer CRON_SECRET` (cron-job.org, EventBridge…). Régua: D+0 link de 48 h + template 1; D+2, com o link vencido, débito no cartão (aprovado: template 2; recusado: novo link de 48 h + template 3); D+5 novo link + template 4 (última cobrança); D+7, com o link vencido, débito no cartão (aprovado: template 5; recusado: template 6, cobrança extrajudicial, e o lote vai para tratamento manual). Uma etapa por execução e pelo menos 48 h entre mensagens. Lote pago sai da régua imediatamente, sem risco de débito duplicado. O débito requer a consulta de token Coral configurada; os canais WhatsApp e e-mail ficam registrados como "aguardando configuração" até os templates oficiais serem definidos.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.
 - `POST /api/webhooks/whatsapp`: contrato `{messageId,status,details?}` e `Authorization: Bearer WHATSAPP_WEBHOOK_TOKEN`.
 - `GET /api/lotes/[id]`: retorna lote, passagens e auditoria.

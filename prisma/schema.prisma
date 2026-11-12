@@ -64,6 +64,8 @@ model LoteCobranca {
   formaPagamento         String?
   /// Valor efetivamente recebido (pode diferir do valor final em acordo/negociação).
   valorRecebidoCentavos  Int?
+  /// Quando o link de pagamento atual vence (emissão + validade configurada). A régua só tenta o débito depois disso.
+  linkExpiraEm           DateTime?
   baixaManual            Boolean             @default(false)
   baixaObservacao        String?
   baixaPor               String?
@@ -162,9 +164,11 @@ model AuditoriaUsuario {
 /// Prazos da régua de cobrança (registro único, id = 1).
 model ConfiguracaoRegua {
   id                    Int      @id @default(1)
-  diasPrimeiraTentativa Int      @default(5)
-  diasLembrete          Int      @default(7)
-  diasSegundaTentativa  Int      @default(10)
+  diasPrimeiraTentativa Int      @default(2)
+  diasLembrete          Int      @default(5)
+  diasSegundaTentativa  Int      @default(7)
+  /// Validade do link de pagamento, em horas (padrão 48).
+  validadeLinkHoras     Int      @default(48)
   atualizadoEm          DateTime @default(now()) @updatedAt
   atualizadoPor         String?
 

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 const ETAPAS_REGUA = ["D0", "D5", "D7", "D10"] as const;
 const LINK_ATRASADO_MS = 60 * 60_000; // lote sem link há mais de 1 hora
 const JANELA_ALERTAS_MS = 30 * 24 * 60 * 60_000; // alertas dos últimos 30 dias
-const ACOES_ALERTA = ["ALERTA_DIVERGENCIA_VALOR", "ALERTA_DUPLICIDADE_DEBITO", "ERRO_PROCESSAMENTO", "COBRAR_CARTAO_BLOQUEADO_LINK_ATIVO"];
+const ACOES_ALERTA = ["ALERTA_DIVERGENCIA_VALOR", "ALERTA_DUPLICIDADE_DEBITO", "ERRO_PROCESSAMENTO"];
 
 /** Números do painel de acompanhamento, já somados no servidor. */
 export async function GET() {
@@ -93,7 +93,7 @@ export async function GET() {
         // Atrasada: sem execução concluída há mais de 2 intervalos (agendador interno) ou 26 h (cron externo diário).
         atrasada: !ultimaRotinaOk || now - ultimaRotinaOk.iniciadoEm.getTime() > (agendadorLigado() ? 2 * intervaloMin * 60_000 : 26 * 60 * 60_000),
       },
-      prazos: { diasPrimeiraTentativa: prazos.diasPrimeiraTentativa, diasLembrete: prazos.diasLembrete, diasSegundaTentativa: prazos.diasSegundaTentativa },
+      prazos: { diasPrimeiraTentativa: prazos.diasPrimeiraTentativa, diasLembrete: prazos.diasLembrete, diasSegundaTentativa: prazos.diasSegundaTentativa, validadeLinkHoras: prazos.validadeLinkHoras },
       lotesSemLink,
       alertas,
     });

@@ -3,13 +3,20 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "@/lib/auth-client";
-import { MAX_DIAS_REGUA, ROTULOS, validarPrazos, type PrazosRegua } from "@/lib/regua-config";
+import { MAX_DIAS_REGUA, MAX_HORAS_LINK, ROTULOS, validarPrazos, type PrazosRegua } from "@/lib/regua-config";
 
 type Config = PrazosRegua & { atualizadoEm: string | null; atualizadoPor: string | null };
-const CAMPOS: Array<{ campo: keyof PrazosRegua; descricao: string }> = [
-  { campo: "diasPrimeiraTentativa", descricao: "Débito no cartão salvo do cliente, se o lote não foi pago pelo link." },
-  { campo: "diasLembrete", descricao: "Mensagem de lembrete com o link de pagamento." },
-  { campo: "diasSegundaTentativa", descricao: "Última tentativa no cartão. Se recusar, o lote vai para inadimplência." },
+type CampoDias = "diasPrimeiraTentativa" | "diasLembrete" | "diasSegundaTentativa";
+const CAMPOS: Array<{ campo: CampoDias; descricao: string }> = [
+  {
+    campo: "diasPrimeiraTentativa",
+    descricao: "Se o link venceu sem pagamento, tenta o débito no cartão. Aprovado: aviso de débito (template 2). Recusado: nova cobrança com link (template 3).",
+  },
+  { campo: "diasLembrete", descricao: "Última comunicação com um novo link de pagamento (template 4)." },
+  {
+    campo: "diasSegundaTentativa",
+    descricao: "Se o link venceu sem pagamento, nova tentativa no cartão. Aprovado: aviso de débito (template 5). Recusado: aviso de cobrança extrajudicial (template 6) e o lote vai para tratamento manual.",
+  },
 ];
 
 export function ReguaConfigPage() {
@@ -18,7 +25,7 @@ export function ReguaConfigPage() {
   const isAdmin = role === "admin" || role === "master";
 
   const [config, setConfig] = useState<Config | null>(null);
-  const [form, setForm] = useState<Record<keyof PrazosRegua, string>>({ diasPrimeiraTentativa: "", diasLembrete: "", diasSegundaTentativa: "" });
+  const [form, setForm] = useState<Record<keyof PrazosRegua, string>>({ diasPrimeiraTentativa: "", diasLembrete: "", diasSegundaTentativa: "", validadeLinkHoras: "" });
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,6 +40,7 @@ export function ReguaConfigPage() {
           diasPrimeiraTentativa: String(body.diasPrimeiraTentativa),
           diasLembrete: String(body.diasLembrete),
           diasSegundaTentativa: String(body.diasSegundaTentativa),
+          validadeLinkHoras: String(body.validadeLinkHoras),
         });
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Erro ao carregar os prazos."));
@@ -68,7 +76,7 @@ export function ReguaConfigPage() {
         <div className="page-heading-left">
           <span className="eyebrow">Administração · Régua de cobrança</span>
           <h1>Prazos da Régua</h1>
-          <p>Quantos dias depois da emissão do lote cada etapa da cobrança acontece. O link de pagamento é sempre enviado no dia da emissão (D+0).</p>
+          <p>Quantos dias depois da emissão do lote cada etapa da cobrança acontece. No dia da emissão (D+0) o cliente recebe a cobrança inicial com o link de pagamento (template 1). Pagamento em qualquer etapa encerra a régua.</p>
         </div>
         <Link className="button secondary" href="/painel">
           ← Voltar ao painel
@@ -107,6 +115,27 @@ export function ReguaConfigPage() {
                 </span>
               </label>
             ))}
+            <label className="filter-field" style={{ display: "grid", gap: 6 }}>
+              <span className="strong">{ROTULOS.validadeLinkHoras}</span>
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>
+                Por quanto tempo cada link enviado ao cliente vale. A régua só tenta o débito no cartão depois que o link vence, para não haver
+                cobrança em dobro. Deve ser igual à validade configurada no Coral/Adyen.
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_HORAS_LINK}
+                  step={1}
+                  required
+                  disabled={!isAdmin || saving}
+                  value={form.validadeLinkHoras}
+                  onChange={(e) => setForm((f) => ({ ...f, validadeLinkHoras: e.target.value }))}
+                  style={{ width: 90 }}
+                />
+                horas
+              </span>
+            </label>
             <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>
               Os prazos precisam ser crescentes e de no máximo {MAX_DIAS_REGUA} dias. Lotes que já passaram de uma etapa não voltam atrás.
               {config.atualizadoPor && ` Última alteração por ${config.atualizadoPor}${config.atualizadoEm ? ` em ${new Date(config.atualizadoEm).toLocaleString("pt-BR")}` : ""}.`}

@@ -258,9 +258,12 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
       <section className="panel dashboard-recent" id="inadimplentes">
         <div className="panel-head">
           <div>
-            <h2>Inadimplentes aguardando baixa · {inadimplentes.total}</h2>
-            <p>Régua encerrada sem pagamento, de qualquer data. Depois de negociar com o cliente, registre a baixa manual no lote.</p>
+            <h2>Tratamento manual · {inadimplentes.total}</h2>
+            <p>Régua encerrada sem pagamento (cobrança extrajudicial), de qualquer data. Depois de negociar com o cliente, registre a baixa manual no lote.</p>
           </div>
+          <Link href="/tratamento-manual" className="button secondary">
+            Ver todos →
+          </Link>
         </div>
         <div className="table-wrap">
           <table className="dashboard-table">

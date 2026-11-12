@@ -1,19 +1,36 @@
 import { db } from "@/lib/db";
 import { chargeStoredPaymentMethod, expirePaymentLink } from "@/lib/adyen";
 import { getStoredPaymentMethod } from "@/lib/services/coral";
-import { buildPaymentMessage, sendWhatsAppMessage } from "@/lib/services/whatsapp";
 import { obterPrazosRegua } from "@/lib/services/config-regua";
 import { gerarNovoLink } from "@/lib/services/novo-link";
-import { rotuloEtapa } from "@/lib/regua-config";
-
-const DAY = 24 * 60 * 60 * 1000;
-type Attempt = "PAID" | "DECLINED" | "UNAVAILABLE";
+import { notificarCliente } from "@/lib/services/notificacoes";
+import { linkVencido, rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
 
 /**
- * Situações em que a régua tenta de novo na próxima execução (sem cartão, bloqueio, falta de configuração, falha temporária).
- * Com a rotina rodando de hora em hora, a mesma situação só é registrada uma vez a cada 24 h por lote, etapa e ação.
+ * Régua de cobrança (alinhamento com o Financeiro):
+ *   D+0  cobrança inicial com link de 48 h (template 1) — feita pela outbox, ao criar o lote.
+ *   D+2  link vencido e não pago → débito no cartão. Aprovado: template 2. Não aprovado: novo link + template 3.
+ *   D+5  link vencido e não pago → novo link + template 4 (última cobrança).
+ *   D+7  link vencido e não pago → débito no cartão. Aprovado: template 5. Não aprovado: template 6
+ *        (cobrança extrajudicial) e o lote vai para tratamento manual (INADIMPLENTE).
+ * Internamente as etapas são D5, D7 e D10 (1ª tentativa, última cobrança, 2ª tentativa); os dias vêm da configuração.
+ * Pago em qualquer momento sai da régua: só lotes EM_REGUA são processados e o status é conferido antes de cada ação.
  */
-const RESULTADOS_REPETIDOS = new Set(["BLOQUEADO", "NAO_CONFIGURADO", "SEM_CARTAO", "PENDENTE", "FALHA"]);
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * PAGO: débito aprovado. NAO_APROVADO: recusado, sem cartão ou cobrança no cartão indisponível (segue a régua).
+ * AGUARDAR: link ainda válido, débito pendente ou falha de comunicação (tenta de novo na próxima execução,
+ * sem avançar, para não arriscar cobrança em dobro). JA_PAGO: o lote foi pago por outro canal.
+ */
+type Tentativa = "PAGO" | "NAO_APROVADO" | "AGUARDAR" | "JA_PAGO";
+
+/**
+ * Situações em que a régua tenta de novo na próxima execução. Com a rotina rodando de hora em hora,
+ * a mesma situação só é registrada uma vez a cada 24 h por lote, etapa e ação.
+ */
+const RESULTADOS_REPETIDOS = new Set(["BLOQUEADO", "NAO_CONFIGURADO", "SEM_CARTAO", "PENDENTE", "FALHA", "AGUARDANDO"]);
 
 async function addLog(
   loteId: number,
@@ -31,356 +48,166 @@ async function addLog(
     });
     if (recente) return null;
   }
-  return db.logRegua.create({
-    data: {
-      loteId,
-      etapa,
-      acao,
-      canal,
-      resultado,
-      detalhesResposta,
-      providerMessageId,
-    },
-  });
+  return db.logRegua.create({ data: { loteId, etapa, acao, canal, resultado, detalhesResposta, providerMessageId } });
 }
 
-async function tryCardCharge(
-  lot: {
-    id: number;
-    numeroContrato: string;
-    cpfCliente: string;
-    valorFinalCentavos: number;
-    adyenLinkId: string | null;
-  },
-  stage: "D5" | "D10"
-): Promise<Attempt> {
-  // 1. Verificação Imediata de Estado (Prevenção de Cobrança Duplicada)
-  const fresh = await db.loteCobranca.findUnique({ where: { id: lot.id } });
-  if (!fresh || fresh.status !== "EM_REGUA") {
-    return "UNAVAILABLE";
-  }
+async function tentarDebito(loteId: number, etapa: "D5" | "D10", prazos: PrazosRegua, now: Date): Promise<Tentativa> {
+  // 1. O lote ainda está em aberto? (pagamento por outro canal encerra a régua)
+  const fresh = await db.loteCobranca.findUnique({ where: { id: loteId } });
+  if (!fresh || fresh.status !== "EM_REGUA") return "JA_PAGO";
 
-  if (fresh.adyenPaymentUrl && !fresh.adyenLinkId) {
-    await addLog(
-      lot.id,
-      stage,
-      "COBRAR_CARTAO_BLOQUEADO_LINK_ATIVO",
-      "Adyen",
-      "BLOQUEADO",
-      "Débito automático suspenso: a API Coral/Foco não retornou um identificador que permita expirar o link ativo com segurança."
-    );
-    return "UNAVAILABLE";
-  }
-
-  // 2. Validação de Credenciais
-  if (!process.env.ADYEN_API_KEY || !process.env.ADYEN_MERCHANT_ACCOUNT) {
-    await addLog(
-      lot.id,
-      stage,
-      "COBRAR_CARTAO",
-      "Adyen",
-      "NAO_CONFIGURADO",
-      "Credenciais Adyen ausentes; cobrança no cartão não iniciada para manter integridade."
-    );
-    return "UNAVAILABLE";
-  }
-
-  // 3. Consulta de Token do Cartão no Coral
-  let token: string | null;
-  try {
-    token = await getStoredPaymentMethod(lot.numeroContrato, lot.cpfCliente);
-  } catch (error) {
-    await addLog(
-      lot.id,
-      stage,
-      "CONSULTAR_TOKEN",
-      "Coral",
-      "FALHA",
-      error instanceof Error ? error.message : "Falha na comunicação com o Coral."
-    );
-    return "UNAVAILABLE";
-  }
-
-  if (!token) {
-    await addLog(
-      lot.id,
-      stage,
-      "CONSULTAR_TOKEN",
-      "Coral",
-      "SEM_CARTAO",
-      "Cliente sem cartão de crédito tokenizado cadastrado no Coral; mantido link de pagamento ativo."
-    );
-    return "UNAVAILABLE";
-  }
-
-  // 4. Trava Anti-Duplicidade: Expirar link de pagamento ativo antes de tentar o débito
-  if (fresh.adyenLinkId) {
+  // 2. Só debita com o link vencido: com o link válido, o cliente ainda pode pagar por ele (cobrança em dobro).
+  if (!linkVencido(fresh, prazos.validadeLinkHoras, now)) {
+    if (!fresh.adyenLinkId) {
+      await addLog(loteId, etapa, "AGUARDAR_VENCIMENTO_LINK", "Sistema", "AGUARDANDO",
+        `Débito no cartão aguardando o vencimento do link de pagamento (${fresh.linkExpiraEm?.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) ?? "sem data"}).`);
+      return "AGUARDAR";
+    }
+    // Link criado direto na Adyen (com identificador): expira antes de debitar.
     try {
       await expirePaymentLink(fresh.adyenLinkId, fresh.id);
-      await addLog(
-        lot.id,
-        stage,
-        "EXPIRAR_LINK_PREVENTIVO",
-        "Adyen",
-        "SUCESSO",
-        `Link ${fresh.adyenLinkId} expirado antes do débito recorrente.`
-      );
+      await addLog(loteId, etapa, "EXPIRAR_LINK_PREVENTIVO", "Adyen", "SUCESSO", `Link ${fresh.adyenLinkId} expirado antes do débito.`);
     } catch (error) {
-      await addLog(
-        lot.id,
-        stage,
-        "EXPIRAR_LINK_PREVENTIVO",
-        "Adyen",
-        "FALHA",
-        `Não foi possível expirar o link ${fresh.adyenLinkId} preventivamente: ${error instanceof Error ? error.message : "Erro desconhecido"}. Débito suspenso para evitar duplicidade.`
-      );
-      return "UNAVAILABLE";
+      await addLog(loteId, etapa, "EXPIRAR_LINK_PREVENTIVO", "Adyen", "FALHA",
+        `Não foi possível expirar o link ${fresh.adyenLinkId}: ${error instanceof Error ? error.message : "erro desconhecido"}. Débito adiado para evitar duplicidade.`);
+      return "AGUARDAR";
     }
   }
 
-  // 5. Execução do Débito via Adyen Recurring
+  // 3. Débito no cartão indisponível (sem credenciais ou sem cartão) conta como não aprovado: a régua segue.
+  if (!process.env.ADYEN_API_KEY || !process.env.ADYEN_MERCHANT_ACCOUNT) {
+    await addLog(loteId, etapa, "COBRAR_CARTAO", "Adyen", "NAO_CONFIGURADO", "Credenciais Adyen ausentes; débito no cartão não realizado.");
+    return "NAO_APROVADO";
+  }
+  let token: string | null;
   try {
-    const result = await chargeStoredPaymentMethod(
-      fresh.id,
-      stage,
-      fresh.valorFinalCentavos,
-      fresh.numeroContrato,
-      token
-    );
-
-    if (result?.resultCode === "Authorised") {
-      // Baixa Atômica: Só confirma se ainda estiver EM_REGUA
-      const updateResult = await db.loteCobranca.updateMany({
-        where: { id: fresh.id, status: "EM_REGUA" },
-        data: {
-          status: "PAGO",
-          dataPagamento: new Date(),
-          adyenPspReference: result.pspReference,
-          formaPagamento: "CARTAO",
-          valorRecebidoCentavos: fresh.valorFinalCentavos,
-        },
-      });
-
-      if (updateResult.count > 0) {
-        await addLog(
-          fresh.id,
-          stage,
-          "COBRAR_CARTAO",
-          "Adyen",
-          "APROVADO",
-          `Débito autorizado no cartão tokenizado (PSP: ${result.pspReference}).`,
-          result.pspReference
-        );
-        return "PAID";
-      } else {
-        // Alerta Crítico de Duplicidade: Webhook pagou no mesmo instante do débito
-        await addLog(
-          fresh.id,
-          stage,
-          "ALERTA_DUPLICIDADE_DEBITO",
-          "Adyen",
-          "ESTORNO_NECESSARIO",
-          `Cartão autorizado (PSP: ${result.pspReference}), porém o lote já foi baixado por outro canal. Necessário estorno preventivo.`
-        );
-        return "PAID";
-      }
-    }
-
-    if (result?.resultCode === "Refused") {
-      const reason = result.refusalReason || "Transação não autorizada pelo emissor do cartão.";
-      await addLog(
-        fresh.id,
-        stage,
-        "COBRAR_CARTAO",
-        "Adyen",
-        "RECUSADO",
-        `Débito recusado: ${reason} (PSP: ${result.pspReference || "N/A"}).`,
-        result.pspReference
-      );
-
-      // Gera novo Pay-by-link para o cliente pagar manualmente após recusa do cartão
-      try {
-        await gerarNovoLink(fresh.id, stage, "Novo link de pagamento solicitado à API Coral/Foco após recusa do cartão.");
-      } catch {
-        // A falha já fica registrada no histórico do lote pelo próprio gerarNovoLink.
-      }
-      return "DECLINED";
-    }
-
-    // Status pendente (ex: 3DS ou análise de risco da adyen)
-    await addLog(
-      fresh.id,
-      stage,
-      "COBRAR_CARTAO",
-      "Adyen",
-      "PENDENTE",
-      `Resultado não conclusivo (${result?.resultCode ?? "Sem resposta"}). Aguardando processamento.`
-    );
-    return "UNAVAILABLE";
+    token = await getStoredPaymentMethod(fresh.numeroContrato, fresh.cpfCliente);
   } catch (error) {
-    await addLog(
-      fresh.id,
-      stage,
-      "COBRAR_CARTAO",
-      "Adyen",
-      "FALHA",
-      error instanceof Error ? error.message : "Falha na chamada de cobrança à Adyen."
-    );
-    return "UNAVAILABLE";
+    await addLog(loteId, etapa, "CONSULTAR_TOKEN", "Coral", "FALHA", error instanceof Error ? error.message : "Falha na comunicação com o Coral.");
+    return "NAO_APROVADO";
   }
+  if (!token) {
+    await addLog(loteId, etapa, "CONSULTAR_TOKEN", "Coral", "SEM_CARTAO", "Cliente sem cartão tokenizado no Coral.");
+    return "NAO_APROVADO";
+  }
+
+  // 4. Débito via Adyen (cartão salvo).
+  try {
+    const result = await chargeStoredPaymentMethod(fresh.id, etapa, fresh.valorFinalCentavos, fresh.numeroContrato, token);
+    if (result?.resultCode === "Authorised") {
+      const update = await db.loteCobranca.updateMany({
+        where: { id: fresh.id, status: "EM_REGUA" },
+        data: { status: "PAGO", dataPagamento: new Date(), adyenPspReference: result.pspReference, formaPagamento: "CARTAO", valorRecebidoCentavos: fresh.valorFinalCentavos },
+      });
+      if (update.count > 0) {
+        await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "APROVADO", `Débito autorizado no cartão (PSP: ${result.pspReference}).`, result.pspReference);
+        return "PAGO";
+      }
+      await addLog(fresh.id, etapa, "ALERTA_DUPLICIDADE_DEBITO", "Adyen", "ESTORNO_NECESSARIO",
+        `Cartão autorizado (PSP: ${result.pspReference}), mas o lote já tinha sido pago por outro canal. Necessário estorno.`);
+      return "JA_PAGO";
+    }
+    if (result?.resultCode === "Refused") {
+      await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "RECUSADO",
+        `Débito recusado: ${result.refusalReason || "não autorizado pelo emissor"} (PSP: ${result.pspReference || "N/A"}).`, result.pspReference);
+      return "NAO_APROVADO";
+    }
+    await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "PENDENTE", `Resultado não conclusivo (${result?.resultCode ?? "sem resposta"}). Aguardando.`);
+    return "AGUARDAR";
+  } catch (error) {
+    await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "FALHA", error instanceof Error ? error.message : "Falha na chamada de cobrança à Adyen.");
+    return "AGUARDAR";
+  }
+}
+
+/** Gera novo link e comunica o cliente com o template da etapa. */
+async function novaCobrancaComLink(loteId: number, etapa: string, template: "NOVA_COBRANCA" | "ULTIMA_COBRANCA") {
+  try {
+    await gerarNovoLink(loteId, etapa, `Novo link para ${template === "NOVA_COBRANCA" ? "nova cobrança" : "última cobrança"}.`);
+  } catch {
+    // A falha fica registrada no histórico pelo próprio gerarNovoLink; a comunicação segue com o link atual.
+  }
+  const lote = await db.loteCobranca.findUnique({ where: { id: loteId } });
+  if (lote && lote.status === "EM_REGUA") await notificarCliente(lote, template, etapa);
+}
+
+async function comunicar(loteId: number, etapa: string, template: "AVISO_DEBITO" | "COBRANCA_EXTRAJUDICIAL") {
+  const lote = await db.loteCobranca.findUnique({ where: { id: loteId } });
+  if (lote) await notificarCliente(lote, template, etapa);
 }
 
 export async function processBillingRule(now = new Date()) {
-  // Prazos configuráveis (tela /configuracoes/regua); padrão 5, 7 e 10 dias.
   const prazos = await obterPrazosRegua();
-  const open = await db.loteCobranca.findMany({
-    where: { status: "EM_REGUA" },
-    orderBy: { dataCriacao: "asc" },
-  });
-
+  const open = await db.loteCobranca.findMany({ where: { status: "EM_REGUA" }, orderBy: { dataCriacao: "asc" } });
   let processed = 0;
 
   for (const item of open) {
-    // Trava de Concorrência Distribuída (processandoAte 5 minutos)
+    // Trava de concorrência (5 minutos) para não processar o mesmo lote duas vezes ao mesmo tempo.
     const claimed = await db.loteCobranca.updateMany({
-      where: {
-        id: item.id,
-        status: "EM_REGUA",
-        OR: [{ processandoAte: null }, { processandoAte: { lt: now } }],
-      },
+      where: { id: item.id, status: "EM_REGUA", OR: [{ processandoAte: null }, { processandoAte: { lt: now } }] },
       data: { processandoAte: new Date(now.getTime() + 5 * 60_000) },
     });
-
     if (!claimed.count) continue;
 
     try {
-      let lot = await db.loteCobranca.findUnique({ where: { id: item.id } });
+      const lot = await db.loteCobranca.findUnique({ where: { id: item.id } });
       if (!lot || lot.status !== "EM_REGUA") continue;
-
       const age = now.getTime() - lot.dataCriacao.getTime();
-
-      // ==========================================
-      // ETAPA D+5: 1ª TENTATIVA NO CARTÃO
-      // ==========================================
-      if (age >= prazos.diasPrimeiraTentativa * DAY && !lot.d5TentativaAt) {
-        await db.loteCobranca.update({
-          where: { id: lot.id },
-          data: { etapaRegua: "D5" },
-        });
-        const outcome = await tryCardCharge(lot, "D5");
-        if (outcome !== "UNAVAILABLE") {
-          await db.loteCobranca.update({
-            where: { id: lot.id },
-            data: { d5TentativaAt: now },
-          });
-        }
-        if (outcome === "PAID") {
-          processed++;
-          continue;
-        }
-      }
-
-      // Revalida status antes de avançar para D+7
-      lot = await db.loteCobranca.findUnique({ where: { id: item.id } });
-      if (!lot || lot.status !== "EM_REGUA") continue;
-
-      // ==========================================
-      // ETAPA D+7: LEMBRETE ATIVO VIA WHATSAPP
-      // ==========================================
-      if (age >= prazos.diasLembrete * DAY && !lot.d7LembreteAt) {
-        let message: { messageId?: string } | null = null;
-        let sendStatus = "NAO_CONFIGURADO";
-        let sendDetails: string | undefined = "Telefone ou gateway WhatsApp não configurado.";
-
-        try {
-          if (lot.telefoneCliente && process.env.WHATSAPP_API_URL) {
-            message = await sendWhatsAppMessage(
-              lot.telefoneCliente,
-              buildPaymentMessage(lot.numeroContrato, lot.valorFinalCentavos, lot.adyenPaymentUrl),
-              `LOTE_${lot.id}_D7`
-            );
-            if (message) {
-              sendStatus = "ENVIADO";
-              sendDetails = `Lembrete ${rotuloEtapa("D7", prazos)} enviado com sucesso para ${lot.telefoneCliente}.`;
-            }
-          }
-        } catch (error) {
-          sendStatus = "FALHA";
-          sendDetails = error instanceof Error ? error.message : "Falha no gateway WhatsApp.";
-        }
-
-        await db.loteCobranca.update({
-          where: { id: lot.id },
-          data: { ...(sendStatus === "ENVIADO" ? { d7LembreteAt: now } : {}), etapaRegua: "D7" },
-        });
-        await addLog(
-          lot.id,
-          "D7",
-          "LEMBRETE_COBRANCA",
-          "WhatsApp",
-          sendStatus,
-          sendDetails,
-          message?.messageId
-        );
-      }
-
-      // Revalida status antes de avançar para D+10
-      lot = await db.loteCobranca.findUnique({ where: { id: item.id } });
-      if (!lot || lot.status !== "EM_REGUA") continue;
-
-      // ==========================================
-      // ETAPA D+10: 2ª TENTATIVA NO CARTÃO / INADIMPLÊNCIA
-      // ==========================================
-      if (age >= prazos.diasSegundaTentativa * DAY && !lot.d10TentativaAt) {
-        await db.loteCobranca.update({
-          where: { id: lot.id },
-          data: { etapaRegua: "D10" },
-        });
-        const outcome = await tryCardCharge(lot, "D10");
-        if (outcome !== "UNAVAILABLE") {
-          await db.loteCobranca.update({
-            where: { id: lot.id },
-            data: { d10TentativaAt: now },
-          });
-        }
-        if (outcome === "DECLINED") {
-          // Encaminha para Inadimplência
-          await db.loteCobranca.update({
-            where: { id: lot.id },
-            data: { status: "INADIMPLENTE", etapaRegua: "D10" },
-          });
-          await addLog(
-            lot.id,
-            "D10",
-            "ENCERRAR_REGUA",
-            "Sistema",
-            "INADIMPLENTE",
-            `Cobrança sem sucesso após ${rotuloEtapa("D10", prazos)}; lote movido para Inadimplência / Negativação.`
-          );
-        }
-        if (outcome === "PAID") {
-          processed++;
-          continue;
-        }
-      }
-
       processed++;
+
+      // Uma etapa por execução e, entre etapas, pelo menos a validade do link (48 h): mesmo sem link
+      // (falha ao gerar), o cliente nunca recebe várias mensagens seguidas.
+      const espera = prazos.validadeLinkHoras * 60 * 60 * 1000;
+      const cedoDemais = (anterior: Date | null) => Boolean(anterior && now.getTime() - anterior.getTime() < espera);
+
+      // ===== D+2 (D5): 1ª tentativa no cartão =====
+      if (!lot.d5TentativaAt) {
+        if (age < prazos.diasPrimeiraTentativa * DAY) continue;
+        if (lot.etapaRegua !== "D5") await db.loteCobranca.update({ where: { id: lot.id }, data: { etapaRegua: "D5" } });
+        const r = await tentarDebito(lot.id, "D5", prazos, now);
+        if (r === "AGUARDAR" || r === "JA_PAGO") continue;
+        await db.loteCobranca.update({ where: { id: lot.id }, data: { d5TentativaAt: now } });
+        if (r === "PAGO") await comunicar(lot.id, "D5", "AVISO_DEBITO");
+        else await novaCobrancaComLink(lot.id, "D5", "NOVA_COBRANCA");
+        continue;
+      }
+
+      // ===== D+5 (D7): última cobrança com novo link =====
+      if (!lot.d7LembreteAt) {
+        if (age < prazos.diasLembrete * DAY || cedoDemais(lot.d5TentativaAt)) continue;
+        if (!linkVencido(lot, prazos.validadeLinkHoras, now)) {
+          await addLog(lot.id, "D7", "AGUARDAR_VENCIMENTO_LINK", "Sistema", "AGUARDANDO", "Última cobrança aguardando o vencimento do link atual.");
+          continue;
+        }
+        await db.loteCobranca.update({ where: { id: lot.id }, data: { etapaRegua: "D7", d7LembreteAt: now } });
+        await novaCobrancaComLink(lot.id, "D7", "ULTIMA_COBRANCA");
+        continue;
+      }
+
+      // ===== D+7 (D10): 2ª tentativa no cartão / cobrança extrajudicial =====
+      if (!lot.d10TentativaAt) {
+        if (age < prazos.diasSegundaTentativa * DAY || cedoDemais(lot.d7LembreteAt)) continue;
+        if (lot.etapaRegua !== "D10") await db.loteCobranca.update({ where: { id: lot.id }, data: { etapaRegua: "D10" } });
+        const r = await tentarDebito(lot.id, "D10", prazos, now);
+        if (r === "AGUARDAR" || r === "JA_PAGO") continue;
+        if (r === "PAGO") {
+          await db.loteCobranca.update({ where: { id: lot.id }, data: { d10TentativaAt: now } });
+          await comunicar(lot.id, "D10", "AVISO_DEBITO");
+          continue;
+        }
+        const encerrado = await db.loteCobranca.updateMany({
+          where: { id: lot.id, status: "EM_REGUA" },
+          data: { d10TentativaAt: now, status: "INADIMPLENTE" },
+        });
+        if (!encerrado.count) continue;
+        await addLog(lot.id, "D10", "ENCERRAR_REGUA", "Sistema", "INADIMPLENTE",
+          `Sem pagamento após ${rotuloEtapa("D10", prazos)}. Lote encaminhado para tratamento manual (cobrança extrajudicial).`);
+        await comunicar(lot.id, "D10", "COBRANCA_EXTRAJUDICIAL");
+      }
     } catch (err) {
-      // Captura erros inesperados para não travar os outros lotes da fila
-      await addLog(
-        item.id,
-        "REGUA",
-        "ERRO_PROCESSAMENTO",
-        "Sistema",
-        "FALHA",
-        err instanceof Error ? err.message : "Erro inesperado ao processar lote."
-      );
+      await addLog(item.id, "REGUA", "ERRO_PROCESSAMENTO", "Sistema", "FALHA", err instanceof Error ? err.message : "Erro inesperado ao processar lote.");
     } finally {
-      // Libera a trava de concorrência
-      await db.loteCobranca.updateMany({
-        where: { id: item.id },
-        data: { processandoAte: null },
-      });
+      await db.loteCobranca.updateMany({ where: { id: item.id }, data: { processandoAte: null } });
     }
   }
 

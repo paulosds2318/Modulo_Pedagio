@@ -112,6 +112,12 @@ export function AppNav() {
           Lotes e cobranças
         </Link>
         <Link
+          href="/tratamento-manual"
+          className={`nav-link ${pathname.startsWith("/tratamento-manual") ? "active" : ""}`}
+        >
+          Tratamento manual
+        </Link>
+        <Link
           href="/painel"
           className={`nav-link ${pathname.startsWith("/painel") ? "active" : ""}`}
         >

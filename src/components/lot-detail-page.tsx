@@ -31,6 +31,7 @@ type Lot = {
   etapaRegua: string;
   adyenLinkId: string | null;
   adyenPaymentUrl: string | null;
+  linkExpiraEm: string | null;
   dataCriacao: string;
   dataPagamento: string | null;
   formaPagamento: string | null;
@@ -58,10 +59,10 @@ const money = (c: number) =>
   );
 /** Etapas da régua com os dias configurados em /configuracoes/regua. */
 const buildStages = (prazos: PrazosRegua) => [
-  { key: "D0", label: "D+0: Emissão e Link Adyen", desc: "Envio de link Pay-by-link via e-mail e WhatsApp" },
-  { key: "D5", label: `${rotuloEtapa("D5", prazos)}: 1ª Tentativa no Cartão`, desc: "Débito automático no cartão tokenizado (Coral)" },
-  { key: "D7", label: `${rotuloEtapa("D7", prazos)}: Lembrete Ativo`, desc: "Mensagem de alerta e aviso via WhatsApp" },
-  { key: "D10", label: `${rotuloEtapa("D10", prazos)}: 2ª Tentativa no Cartão`, desc: "Última tentativa de débito ou negativação" },
+  { key: "D0", label: "D+0: Cobrança inicial", desc: `Link de pagamento de ${prazos.validadeLinkHoras} h e template 1 (WhatsApp e e-mail)` },
+  { key: "D5", label: `${rotuloEtapa("D5", prazos)}: 1ª Tentativa no Cartão`, desc: "Link vencido sem pagamento: débito no cartão. Aprovado: template 2. Recusado: novo link e template 3" },
+  { key: "D7", label: `${rotuloEtapa("D7", prazos)}: Última Cobrança`, desc: "Novo link de pagamento e template 4" },
+  { key: "D10", label: `${rotuloEtapa("D10", prazos)}: 2ª Tentativa no Cartão`, desc: "Aprovado: template 5. Recusado: template 6 (extrajudicial) e tratamento manual" },
 ];
 export function LotDetailPage() {
   const params = useParams<{ id: string }>();
@@ -511,7 +512,20 @@ export function LotDetailPage() {
         <div className="panel-head">
           <div>
             <h2>Régua de Cobrança Automatizada</h2>
-            <p>Acompanhamento das etapas D+0 a D+10 executadas pelo motor de cobrança.</p>
+            <p>
+              Etapas D+0 a {rotuloEtapa("D10", prazos)} executadas pelo motor de cobrança. Pagamento em qualquer etapa encerra a régua.
+              {lot.adyenPaymentUrl && lot.linkExpiraEm && (lot.status === "EM_REGUA" || lot.status === "INADIMPLENTE") && (
+                <>
+                  {" "}Link atual:{" "}
+                  <span className="strong" style={{ color: new Date(lot.linkExpiraEm) > new Date() ? "var(--foco-green)" : "var(--foco-red)" }}>
+                    {new Date(lot.linkExpiraEm) > new Date()
+                      ? `válido até ${new Date(lot.linkExpiraEm).toLocaleString("pt-BR")}`
+                      : `vencido em ${new Date(lot.linkExpiraEm).toLocaleString("pt-BR")}`}
+                  </span>
+                  .
+                </>
+              )}
+            </p>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {isAdmin && (lot.status === "EM_REGUA" || lot.status === "INADIMPLENTE") && (

@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { createPaymentLink } from "@/lib/adyen";
-import { buildPaymentMessage, sendWhatsAppMessage } from "@/lib/services/whatsapp";
+import { notificarCliente } from "@/lib/services/notificacoes";
+import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { vencimentoLink } from "@/lib/regua-config";
 import { retryAt } from "@/lib/retry";
 
 const MAX_ATTEMPTS = 10;
@@ -47,19 +49,14 @@ export async function processIntegrationOutbox(now = new Date(), loteId?: number
           const rental = await db.contratoLocacao.findUnique({ where: { numeroContrato: lot.numeroContrato }, select: { dataRetirada: true } });
           const link = await createPaymentLink(lot.id, lot.valorFinalCentavos, lot.numeroContrato, lot.cpfCliente, rental?.dataRetirada);
           if (!link?.url) throw new Error("Coral Pay By Link não retornou a URL do pagamento.");
-          await db.loteCobranca.update({ where: { id: lot.id }, data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url, ...(link.nomeCliente ? { nomeCliente: link.nomeCliente } : {}), ...(link.telefoneContato ? { telefoneContato: link.telefoneContato } : {}) } });
+          const { validadeLinkHoras } = await obterPrazosRegua();
+          await db.loteCobranca.update({ where: { id: lot.id }, data: { adyenLinkId: link.id ?? null, adyenPaymentUrl: link.url, linkExpiraEm: vencimentoLink(new Date(), validadeLinkHoras), ...(link.nomeCliente ? { nomeCliente: link.nomeCliente } : {}), ...(link.telefoneContato ? { telefoneContato: link.telefoneContato } : {}) } });
           await db.logRegua.create({ data: { loteId: lot.id, etapa: "D0", acao: "CRIAR_PAY_BY_LINK", canal: "Coral/Foco", resultado: "SUCESSO", detalhesResposta: "Link de pagamento solicitado à API Coral/Foco." } });
         }
       } else if (job.tipo === "WHATSAPP_D0") {
-        if (!lot.telefoneCliente) {
-          await db.integrationOutbox.update({ where: { id: job.id }, data: { status: "IGNORADO", processandoAte: null, ultimoErro: "Telefone do cliente não cadastrado." } });
-          await db.logRegua.create({ data: { loteId: lot.id, etapa: "D0", acao: job.tipo, canal: "WhatsApp", resultado: "IGNORADO", detalhesResposta: "Telefone do cliente não cadastrado." } });
-          continue;
-        }
-        if (!process.env.WHATSAPP_API_URL) throw new Error("CONFIG: Gateway WhatsApp ainda não está configurado.");
-        const message = await sendWhatsAppMessage(lot.telefoneCliente, buildPaymentMessage(lot.numeroContrato, lot.valorFinalCentavos, lot.adyenPaymentUrl), `LOTE_${lot.id}_D0`);
-        if (!message) throw new Error("Gateway WhatsApp ainda não está configurado.");
-        await db.logRegua.create({ data: { loteId: lot.id, etapa: "D0", acao: "NOTIFICAR_CLIENTE", canal: "WhatsApp", resultado: "ENVIADO", detalhesResposta: "Mensagem D+0 enviada ao gateway.", providerMessageId: message.messageId } });
+        // Template 1 (cobrança inicial) só depois que o link existe; sem link, a tarefa é repetida.
+        if (!lot.adyenPaymentUrl) throw new Error("Link de pagamento ainda não gerado; a cobrança inicial será enviada depois.");
+        await notificarCliente(lot, "COBRANCA_INICIAL", "D0");
       } else {
         throw new Error("Tipo de tarefa de integração desconhecido.");
       }

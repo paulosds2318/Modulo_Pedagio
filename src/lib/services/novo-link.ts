@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
 import { createPaymentLink } from "@/lib/adyen";
+import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { vencimentoLink } from "@/lib/regua-config";
 
 /** Ações do histórico que registram a criação de um link de pagamento para o lote. */
 export const ACOES_LINK = ["CRIAR_PAY_BY_LINK", "CRIAR_NOVO_LINK", "GERAR_NOVO_LINK"];
@@ -24,6 +26,7 @@ export async function gerarNovoLink(loteId: number, etapa: string, detalhe: stri
       data: {
         adyenLinkId: link.id ?? null,
         adyenPaymentUrl: link.url,
+        linkExpiraEm: vencimentoLink(new Date(), (await obterPrazosRegua()).validadeLinkHoras),
         ...(link.nomeCliente ? { nomeCliente: link.nomeCliente } : {}),
         ...(link.telefoneContato ? { telefoneContato: link.telefoneContato } : {}),
       },
