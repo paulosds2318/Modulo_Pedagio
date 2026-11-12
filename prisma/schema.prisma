@@ -108,6 +108,79 @@ model IntegrationOutbox {
   @@map("integration_outbox")
 }
 
+/// Cada execução da busca de passagens no Coral (toll-data), pelo cron ou manual.
+model SincronizacaoCoral {
+  id               Int       @id @default(autoincrement())
+  origem           String
+  status           String
+  iniciadoEm       DateTime  @default(now())
+  finalizadoEm     DateTime?
+  periodoInicio    String?
+  periodoFim       String?
+  recebidas        Int       @default(0)
+  importadas       Int       @default(0)
+  duplicadas       Int       @default(0)
+  rejeitadas       Int       @default(0)
+  lotesCompilados  Int       @default(0)
+  erro             String?
+
+  @@index([iniciadoEm])
+  @@map("sincronizacoes_coral")
+}
+
+/// Ações feitas por usuários (rastreabilidade e LGPD).
+model AuditoriaUsuario {
+  id           Int      @id @default(autoincrement())
+  dataHora     DateTime @default(now())
+  usuarioId    String?
+  usuarioEmail String?
+  usuarioNome  String?
+  acao         String
+  entidade     String?
+  entidadeId   String?
+  detalhes     String?
+  ip           String?
+
+  @@index([dataHora])
+  @@index([acao])
+  @@index([usuarioId])
+  @@map("auditoria_usuarios")
+}
+
+/// Prazos da régua de cobrança (registro único, id = 1).
+model ConfiguracaoRegua {
+  id                    Int      @id @default(1)
+  diasPrimeiraTentativa Int      @default(5)
+  diasLembrete          Int      @default(7)
+  diasSegundaTentativa  Int      @default(10)
+  atualizadoEm          DateTime @default(now()) @updatedAt
+  atualizadoPor         String?
+
+  @@map("configuracao_regua")
+}
+
+/// Cada execução da rotina automática (sincronização com o Coral, régua e retentativas).
+model ExecucaoRotina {
+  id           Int       @id @default(autoincrement())
+  origem       String
+  status       String
+  iniciadoEm   DateTime  @default(now())
+  finalizadoEm DateTime?
+  resumo       String?
+  erro         String?
+
+  @@index([iniciadoEm])
+  @@map("execucoes_rotina")
+}
+
+/// Trava da rotina (registro único): impede duas execuções ao mesmo tempo, mesmo com mais de um container.
+model RotinaTrava {
+  id         Int       @id @default(1)
+  ocupadaAte DateTime?
+
+  @@map("rotina_trava")
+}
+
 // =========================================================================
 // Better Auth - Autenticação & Perfis (Admin e Visualização)
 // =========================================================================

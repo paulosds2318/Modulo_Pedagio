@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatCpf, formatPhone } from "@/lib/pii";
+import { PRAZOS_PADRAO, rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
 type Entry = {
   id: number;
   etapa: string;
@@ -43,15 +44,24 @@ const money = (c: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     c / 100
   );
-const stages = [
+/** Etapas da régua com os dias configurados em /configuracoes/regua. */
+const buildStages = (prazos: PrazosRegua) => [
   { key: "D0", label: "D+0: Emissão e Link Adyen", desc: "Envio de link Pay-by-link via e-mail e WhatsApp" },
-  { key: "D5", label: "D+5: 1ª Tentativa no Cartão", desc: "Débito automático no cartão tokenizado (Coral)" },
-  { key: "D7", label: "D+7: Lembrete Ativo", desc: "Mensagem de alerta e aviso via WhatsApp" },
-  { key: "D10", label: "D+10: 2ª Tentativa no Cartão", desc: "Última tentativa de débito ou negativação" },
+  { key: "D5", label: `${rotuloEtapa("D5", prazos)}: 1ª Tentativa no Cartão`, desc: "Débito automático no cartão tokenizado (Coral)" },
+  { key: "D7", label: `${rotuloEtapa("D7", prazos)}: Lembrete Ativo`, desc: "Mensagem de alerta e aviso via WhatsApp" },
+  { key: "D10", label: `${rotuloEtapa("D10", prazos)}: 2ª Tentativa no Cartão`, desc: "Última tentativa de débito ou negativação" },
 ];
 export function LotDetailPage() {
   const params = useParams<{ id: string }>();
   const [lot, setLot] = useState<Lot | null>(null);
+  const [prazos, setPrazos] = useState<PrazosRegua>(PRAZOS_PADRAO);
+  const stages = buildStages(prazos);
+  useEffect(() => {
+    fetch("/api/configuracoes/regua", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => cfg && setPrazos(cfg))
+      .catch(() => undefined);
+  }, []);
   const [error, setError] = useState("");
   const [queryingAdyen, setQueryingAdyen] = useState(false);
   const [queryMessage, setQueryMessage] = useState("");

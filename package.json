@@ -8,7 +8,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test test/security.test.ts test/date-range.test.ts test/pii.test.ts test/passagem-schema.test.ts test/painel.test.ts",
+    "test": "node --experimental-strip-types --test test/security.test.ts test/date-range.test.ts test/pii.test.ts test/passagem-schema.test.ts test/painel.test.ts test/regua-config.test.ts test/agendador.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -19,7 +19,7 @@
     "@prisma/client": "6.19.1",
     "better-auth": "^1.7.11",
     "exceljs": "^4.4.0",
-    "next": "16.4.0",
+    "next": "16.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "zod": "^4.1.0"
@@ -29,7 +29,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "16.4.3",
     "prisma": "6.19.1",
     "typescript": "^5.8.0"
   },

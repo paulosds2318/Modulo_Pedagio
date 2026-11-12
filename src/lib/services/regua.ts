@@ -2,11 +2,19 @@ import { db } from "@/lib/db";
 import { chargeStoredPaymentMethod, createPaymentLink, expirePaymentLink } from "@/lib/adyen";
 import { getStoredPaymentMethod } from "@/lib/services/coral";
 import { buildPaymentMessage, sendWhatsAppMessage } from "@/lib/services/whatsapp";
+import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { rotuloEtapa } from "@/lib/regua-config";
 
 const DAY = 24 * 60 * 60 * 1000;
 type Attempt = "PAID" | "DECLINED" | "UNAVAILABLE";
 
-const addLog = (
+/**
+ * Situações em que a régua tenta de novo na próxima execução (sem cartão, bloqueio, falta de configuração, falha temporária).
+ * Com a rotina rodando de hora em hora, a mesma situação só é registrada uma vez a cada 24 h por lote, etapa e ação.
+ */
+const RESULTADOS_REPETIDOS = new Set(["BLOQUEADO", "NAO_CONFIGURADO", "SEM_CARTAO", "PENDENTE", "FALHA"]);
+
+async function addLog(
   loteId: number,
   etapa: string,
   acao: string,
@@ -14,8 +22,15 @@ const addLog = (
   resultado: string,
   detalhesResposta?: string,
   providerMessageId?: string
-) =>
-  db.logRegua.create({
+) {
+  if (RESULTADOS_REPETIDOS.has(resultado)) {
+    const recente = await db.logRegua.findFirst({
+      where: { loteId, etapa, acao, resultado, dataHora: { gte: new Date(Date.now() - DAY) } },
+      select: { id: true },
+    });
+    if (recente) return null;
+  }
+  return db.logRegua.create({
     data: {
       loteId,
       etapa,
@@ -26,6 +41,7 @@ const addLog = (
       providerMessageId,
     },
   });
+}
 
 async function tryCardCharge(
   lot: {
@@ -234,6 +250,8 @@ async function tryCardCharge(
 }
 
 export async function processBillingRule(now = new Date()) {
+  // Prazos configuráveis (tela /configuracoes/regua); padrão 5, 7 e 10 dias.
+  const prazos = await obterPrazosRegua();
   const open = await db.loteCobranca.findMany({
     where: { status: "EM_REGUA" },
     orderBy: { dataCriacao: "asc" },
@@ -263,7 +281,7 @@ export async function processBillingRule(now = new Date()) {
       // ==========================================
       // ETAPA D+5: 1ª TENTATIVA NO CARTÃO
       // ==========================================
-      if (age >= 5 * DAY && !lot.d5TentativaAt) {
+      if (age >= prazos.diasPrimeiraTentativa * DAY && !lot.d5TentativaAt) {
         await db.loteCobranca.update({
           where: { id: lot.id },
           data: { etapaRegua: "D5" },
@@ -288,7 +306,7 @@ export async function processBillingRule(now = new Date()) {
       // ==========================================
       // ETAPA D+7: LEMBRETE ATIVO VIA WHATSAPP
       // ==========================================
-      if (age >= 7 * DAY && !lot.d7LembreteAt) {
+      if (age >= prazos.diasLembrete * DAY && !lot.d7LembreteAt) {
         let message: { messageId?: string } | null = null;
         let sendStatus = "NAO_CONFIGURADO";
         let sendDetails: string | undefined = "Telefone ou gateway WhatsApp não configurado.";
@@ -302,7 +320,7 @@ export async function processBillingRule(now = new Date()) {
             );
             if (message) {
               sendStatus = "ENVIADO";
-              sendDetails = `Lembrete D+7 enviado com sucesso para ${lot.telefoneCliente}.`;
+              sendDetails = `Lembrete ${rotuloEtapa("D7", prazos)} enviado com sucesso para ${lot.telefoneCliente}.`;
             }
           }
         } catch (error) {
@@ -332,7 +350,7 @@ export async function processBillingRule(now = new Date()) {
       // ==========================================
       // ETAPA D+10: 2ª TENTATIVA NO CARTÃO / INADIMPLÊNCIA
       // ==========================================
-      if (age >= 10 * DAY && !lot.d10TentativaAt) {
+      if (age >= prazos.diasSegundaTentativa * DAY && !lot.d10TentativaAt) {
         await db.loteCobranca.update({
           where: { id: lot.id },
           data: { etapaRegua: "D10" },
@@ -356,7 +374,7 @@ export async function processBillingRule(now = new Date()) {
             "ENCERRAR_REGUA",
             "Sistema",
             "INADIMPLENTE",
-            "Cobrança sem sucesso após D+10; lote movido para Inadimplência / Negativação."
+            `Cobrança sem sucesso após ${rotuloEtapa("D10", prazos)}; lote movido para Inadimplência / Negativação.`
           );
         }
         if (outcome === "PAID") {

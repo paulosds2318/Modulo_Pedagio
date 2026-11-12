@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const session = await getServerSession();
-  if (!session) return NextResponse.json({ error: "Autentica??o necess?ria." }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const pageValue = Number.parseInt(searchParams.get("page") || "1", 10);
@@ -54,6 +54,6 @@ export async function GET(request: Request) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     });
   } catch {
-    return NextResponse.json({ error: "Banco de dados indispon?vel." }, { status: 503 });
+    return NextResponse.json({ error: "Banco de dados indisponível." }, { status: 503 });
   }
 }

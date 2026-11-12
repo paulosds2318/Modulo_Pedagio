@@ -71,6 +71,17 @@ A resposta deve seguir o mesmo contrato de `POST /api/passagens` (os 10 campos o
 
 ## Rotina automática
 
+A rotina busca passagens no Coral, avança a régua (tentativas no cartão, lembrete, inadimplência) e repete integrações com falha. Pode rodar de dois jeitos, que compartilham a mesma trava no banco (nunca duas execuções ao mesmo tempo):
+
+| Variável | O que configura | Quando usar |
+|---|---|---|
+| **AGENDADOR_INTERNO** | `true` liga o agendador dentro do próprio módulo: a rotina roda sozinha enquanto o servidor estiver ligado. | Produção na AWS (ECS com container sempre ligado). No Render gratuito, que "dorme", só roda enquanto o app estiver acordado. |
+| **AGENDADOR_INTERVALO_MIN** | Intervalo entre execuções, em minutos. | Opcional; padrão 60, mínimo 5. A primeira execução acontece 1 minuto depois de o servidor subir. |
+
+Cada execução aparece no painel (cartão "Rotina automática"), com alerta se parar ou falhar.
+
+### Chamada externa (opcional)
+
 | Variável | O que configura | Quando usar |
 |---|---|---|
 | **CRON_SECRET** | Bearer que protege GET/POST /api/cron/regua, a rotina automática de cobrança. | Configure quando um agendador externo chamar a rota. Envie como Authorization: Bearer <segredo>. |

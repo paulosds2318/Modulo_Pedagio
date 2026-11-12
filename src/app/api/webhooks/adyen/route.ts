@@ -41,6 +41,14 @@ export async function POST(request: Request) {
     const receivedCents = Number(amountObj.value ?? 0);
     const currency = String(amountObj.currency ?? "").toUpperCase();
 
+    // Lote inexistente (apagado, de outro ambiente ou de outro sistema na mesma conta Adyen): a notificação é
+    // aceita e ignorada. Responder erro faria a Adyen reenviá-la sem parar e atrasar as demais.
+    const loteExiste = await db.loteCobranca.findUnique({ where: { id }, select: { id: true } });
+    if (!loteExiste) {
+      console.warn(`[webhook adyen] Notificação ${eventCode} (PSP ${pspReference}) para ${reference} ignorada: lote não encontrado.`);
+      continue;
+    }
+
     // 2. Processamento do Evento AUTHORISATION
     if (eventCode === "AUTHORISATION") {
       if (!isSuccess) {

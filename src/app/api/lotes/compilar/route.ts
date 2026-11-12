@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerSession, hasRole } from "@/lib/auth";
 import { compilarLote } from "@/lib/services/compilar-lote";
+import { registrarAuditoria } from "@/lib/services/auditoria";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,11 @@ export async function POST(request: Request) {
 
   try {
     const lot = await compilarLote(parsed.data.passagemIds, parsed.data.taxaCentavos);
+    await registrarAuditoria(session, request, "COMPILAR_LOTE", {
+      entidade: "lote",
+      entidadeId: lot.id,
+      detalhes: { contrato: lot.numeroContrato, passagens: parsed.data.passagemIds.length, valorFinalCentavos: lot.valorFinalCentavos, taxaCentavos: parsed.data.taxaCentavos },
+    });
     return NextResponse.json(lot, { status: 201 });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";

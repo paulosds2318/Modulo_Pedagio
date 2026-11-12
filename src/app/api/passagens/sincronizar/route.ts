@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { getServerSession, hasBearerSecret, hasRole } from "@/lib/auth";
 import { sincronizarPassagensCoral, tollDataUrl } from "@/lib/services/coral-toll-data";
+import { registrarAuditoria } from "@/lib/services/auditoria";
 
 export const runtime = "nodejs";
 
 /** Busca passagens ConectCar no Coral (toll-data). Aceita sessão admin ou Bearer CRON_SECRET. */
 export async function POST(request: Request) {
-  if (!hasBearerSecret(request, process.env.CRON_SECRET)) {
-    const session = await getServerSession();
+  const viaCron = hasBearerSecret(request, process.env.CRON_SECRET);
+  const session = viaCron ? null : await getServerSession();
+  if (!viaCron) {
     if (!session) return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
     if (!hasRole(session, "admin")) {
       return NextResponse.json({ error: "Apenas administradores podem sincronizar passagens." }, { status: 403 });
@@ -25,7 +27,13 @@ export async function POST(request: Request) {
   };
 
   try {
-    return NextResponse.json(await sincronizarPassagensCoral(new Date(), periodo));
+    const resultado = await sincronizarPassagensCoral(new Date(), periodo, viaCron ? "CRON" : "MANUAL");
+    if (session) {
+      await registrarAuditoria(session, request, "SINCRONIZAR_CORAL", {
+        detalhes: { periodo: resultado.periodo, recebidas: resultado.recebidas, importadas: resultado.importadas, lotesCompilados: resultado.lotesCompilados },
+      });
+    }
+    return NextResponse.json(resultado);
   } catch (error) {
     const raw = error instanceof Error ? error.message : "Falha ao sincronizar passagens do Coral.";
     if (raw.startsWith("PERIODO:")) return NextResponse.json({ error: raw.replace(/^PERIODO:\s*/, "") }, { status: 400 });

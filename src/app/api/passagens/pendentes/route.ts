@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getServerSession();
-  if (!session) return NextResponse.json({ error: "Autentica??o necess?ria." }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
 
   try {
     const passages = await db.passagemPedagio.findMany({
@@ -15,6 +15,6 @@ export async function GET() {
     });
     return NextResponse.json(passages);
   } catch {
-    return NextResponse.json({ error: "Banco de dados indispon?vel." }, { status: 503 });
+    return NextResponse.json({ error: "Banco de dados indisponível." }, { status: 503 });
   }
 }

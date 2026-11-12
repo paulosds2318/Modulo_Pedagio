@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getServerSession, hasRole, isMasterEmail } from "@/lib/auth";
 import { hashPassword } from "better-auth/crypto";
 import { randomUUID } from "node:crypto";
+import { registrarAuditoria } from "@/lib/services/auditoria";
 
 export const runtime = "nodejs";
 const createSchema = z.object({
@@ -26,7 +27,7 @@ export async function GET() {
     });
     return NextResponse.json(users);
   } catch {
-    return NextResponse.json({ error: "Banco de dados indisponivel." }, { status: 503 });
+    return NextResponse.json({ error: "Banco de dados indisponível." }, { status: 503 });
   }
 }
 
@@ -35,9 +36,9 @@ export async function POST(request: Request) {
   if (!session || !hasRole(session, "admin")) return NextResponse.json({ error: "Acesso restrito a administradores." }, { status: 403 });
   let body: unknown;
   try { body = await request.json(); }
-  catch { return NextResponse.json({ error: "JSON invalido." }, { status: 400 }); }
+  catch { return NextResponse.json({ error: "JSON inválido." }, { status: 400 }); }
   const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Dados de usuario invalidos." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Dados de usuário inválidos." }, { status: 400 });
   const isMaster = hasRole(session, "master");
   if (parsed.data.role === "admin" && !isMaster) {
     return NextResponse.json({ error: "Somente o administrador master pode criar administradores." }, { status: 403 });
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Somente o administrador master pode atribuir essa conta." }, { status: 403 });
     }
     if (await db.user.findUnique({ where: { email } })) {
-      return NextResponse.json({ error: "Ja existe usuario com este email." }, { status: 409 });
+      return NextResponse.json({ error: "Já existe usuário com este e-mail." }, { status: 409 });
     }
     const password = await hashPassword(parsed.data.password);
     const now = new Date();
@@ -61,11 +62,12 @@ export async function POST(request: Request) {
       });
       return created;
     });
+    await registrarAuditoria(session, request, "CRIAR_USUARIO", { entidade: "usuario", entidadeId: user.id, detalhes: { email: user.email, perfil: user.role } });
     return NextResponse.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt } }, { status: 201 });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
-      return NextResponse.json({ error: "Ja existe usuario com este email." }, { status: 409 });
+      return NextResponse.json({ error: "Já existe usuário com este e-mail." }, { status: 409 });
     }
-    return NextResponse.json({ error: "Falha ao criar usuario." }, { status: 500 });
+    return NextResponse.json({ error: "Falha ao criar usuário." }, { status: 500 });
   }
 }

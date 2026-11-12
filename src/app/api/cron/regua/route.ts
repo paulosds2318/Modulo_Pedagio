@@ -1,25 +1,29 @@
 import { NextResponse } from "next/server";
 import { hasBearerSecret } from "@/lib/auth";
-import { processBillingRule } from "@/lib/services/regua";
-import { processIntegrationOutbox } from "@/lib/services/outbox";
-import { sincronizarPassagensCoral, tollDataUrl } from "@/lib/services/coral-toll-data";
+import { executarRotina } from "@/lib/services/rotina";
+
 export const runtime = "nodejs";
 
-/** Falha na consulta ao Coral não deve impedir a régua nem a outbox. */
-async function syncPassages() {
-  if (!tollDataUrl()) return { status: "NAO_CONFIGURADO" };
-  try { return { status: "OK", ...(await sincronizarPassagensCoral()) }; }
-  catch (error) { return { status: "FALHA", erro: error instanceof Error ? error.message.replace(/^CONFIG:\s*/, "") : "Falha desconhecida." }; }
+/**
+ * Rotina automática chamada de fora (cron-job.org, EventBridge…), com Authorization: Bearer CRON_SECRET.
+ * Em produção com AGENDADOR_INTERNO=true, o próprio módulo já roda a rotina sozinho; esta rota continua
+ * disponível para execuções manuais. A trava no banco impede duas execuções ao mesmo tempo.
+ */
+async function run(request: Request) {
+  if (!hasBearerSecret(request, process.env.CRON_SECRET)) {
+    return NextResponse.json({ error: "Não autorizado ou CRON_SECRET não configurado." }, { status: process.env.CRON_SECRET ? 401 : 503 });
+  }
+  try {
+    const resultado = await executarRotina("CRON_EXTERNO");
+    return NextResponse.json(resultado, { status: resultado.status === "IGNORADA" ? 409 : 200 });
+  } catch {
+    return NextResponse.json({ error: "Falha temporária ao processar tarefas agendadas." }, { status: 500 });
+  }
 }
 
-async function run(request: Request) {
-  if (!hasBearerSecret(request, process.env.CRON_SECRET)) return NextResponse.json({ error: "Não autorizado ou CRON_SECRET não configurado." }, { status: process.env.CRON_SECRET ? 401 : 503 });
-  try {
-    const passagens = await syncPassages();
-    const [regua, integracoes] = await Promise.all([processBillingRule(), processIntegrationOutbox()]);
-    return NextResponse.json({ passagens, regua, integracoes });
-  }
-  catch { return NextResponse.json({ error: "Falha temporária ao processar tarefas agendadas." }, { status: 500 }); }
+export async function GET(request: Request) {
+  return run(request);
 }
-export async function GET(request: Request) { return run(request); }
-export async function POST(request: Request) { return run(request); }
+export async function POST(request: Request) {
+  return run(request);
+}

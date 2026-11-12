@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
+import { rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
 
 type Etapa = { chave: string; quantidade: number; valorCentavos: number };
 type Integracao = {
@@ -12,12 +13,30 @@ type Integracao = {
   falhas: number;
   ignoradas: number;
 };
+type Sincronizacao = {
+  id: number;
+  origem: string;
+  status: string;
+  iniciadoEm: string;
+  finalizadoEm: string | null;
+  recebidas: number;
+  importadas: number;
+  lotesCompilados: number;
+  erro: string | null;
+};
 type Painel = {
   geradoEm: string;
   passagensPendentes: number;
   funil: Etapa[];
   integracoes: Integracao[];
-  sincronizacaoCoral: { configurada: boolean };
+  sincronizacaoCoral: { configurada: boolean; ultima: Sincronizacao | null; ultimaComSucesso: Sincronizacao | null; atrasada: boolean };
+  prazos: PrazosRegua;
+  rotina: {
+    agendadorInterno: boolean;
+    intervaloMin: number;
+    ultima: { origem: string; status: string; iniciadoEm: string; finalizadoEm: string | null; erro: string | null } | null;
+    atrasada: boolean;
+  };
   lotesSemLink: { id: number; numeroContrato: string; dataCriacao: string }[];
   alertas: { id: number; loteId: number; etapa: string; acao: string; resultado: string; dataHora: string }[];
 };
@@ -92,13 +111,59 @@ export function OperationPanel({ refreshKey = 0, modo = "completo" }: { refreshK
 
   const maxQtd = Math.max(1, ...data.funil.map((e) => e.quantidade));
   const totalLotes = data.funil.reduce((s, e) => s + e.quantidade, 0);
-  const alertasTotal = data.lotesSemLink.length + data.alertas.length;
+  const sync = data.sincronizacaoCoral;
+  const alertaSync = sync.configurada && (sync.atrasada || sync.ultima?.status === "FALHA");
+  // Selo do cartão "Passagens do Coral": vermelho na falha, âmbar se parada ou sem configuração, verde se em dia.
+  const seloSync = !sync.configurada
+    ? { rotulo: "Busca não configurada", cor: "var(--foco-amber)" }
+    : sync.ultima?.status === "FALHA"
+      ? { rotulo: "Última sincronização falhou", cor: "var(--foco-red)" }
+      : sync.atrasada
+        ? { rotulo: "Sincronização parada", cor: "var(--foco-red)" }
+        : sync.ultima?.status === "EM_ANDAMENTO"
+          ? { rotulo: "Sincronizando…", cor: "var(--foco-amber)" }
+          : { rotulo: "Sincronização em dia", cor: "var(--foco-green)" };
+  const rotina = data.rotina;
+  const alertaRotina = rotina.atrasada || rotina.ultima?.status === "FALHA";
+  const alertasTotal = data.lotesSemLink.length + data.alertas.length + (alertaSync ? 1 : 0) + (alertaRotina ? 1 : 0);
+  const seloRotina = rotina.ultima?.status === "FALHA"
+    ? { rotulo: "Última execução falhou", cor: "var(--foco-red)" }
+    : rotina.atrasada
+      ? { rotulo: rotina.ultima ? "Parada" : "Ainda não executou", cor: rotina.agendadorInterno ? "var(--foco-red)" : "var(--foco-amber)" }
+      : rotina.ultima?.status === "EM_ANDAMENTO"
+        ? { rotulo: "Executando…", cor: "var(--foco-amber)" }
+        : { rotulo: "Em dia", cor: "var(--foco-green)" };
   const listaAlertas = (
     <>
         {alertasTotal === 0 ? (
         <p style={{ ...pill("var(--foco-green)"), fontSize: 13 }}><span style={dot("var(--foco-green)")} />Nenhum alerta nos últimos 30 dias.</p>
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+          {alertaRotina && (
+            <li style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <span style={pill("var(--foco-red)")}>
+                <span style={dot("var(--foco-red)")} />
+                {rotina.ultima?.status === "FALHA" ? "Rotina automática falhou" : "Rotina automática não está rodando"}
+              </span>
+              <span style={{ fontSize: 13 }}>
+                {rotina.ultima?.status === "FALHA" && rotina.ultima.erro ? `${rotina.ultima.erro} · ` : ""}
+                {rotina.ultima ? `última execução em ${dateTime(rotina.ultima.iniciadoEm)}` : "nenhuma execução registrada"}
+                {!rotina.agendadorInterno ? " · agendador interno desligado (AGENDADOR_INTERNO)" : ""}
+              </span>
+            </li>
+          )}
+          {alertaSync && (
+            <li style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <span style={pill("var(--foco-red)")}>
+                <span style={dot("var(--foco-red)")} />
+                {sync.ultima?.status === "FALHA" ? "Última sincronização com o Coral falhou" : "Sincronização com o Coral parada"}
+              </span>
+              <span style={{ fontSize: 13 }}>
+                {sync.ultima?.status === "FALHA" && sync.ultima.erro ? `${sync.ultima.erro} · ` : ""}
+                {sync.ultimaComSucesso ? `último sucesso em ${dateTime(sync.ultimaComSucesso.iniciadoEm)}` : "nenhuma sincronização com sucesso registrada"}
+              </span>
+            </li>
+          )}
           {data.lotesSemLink.map((l) => (
             <li key={`sem-link-${l.id}`} style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <span style={pill("var(--foco-amber)")}><span style={dot("var(--foco-amber)")} />Lote sem link de pagamento</span>
@@ -148,7 +213,7 @@ export function OperationPanel({ refreshKey = 0, modo = "completo" }: { refreshK
         </div>
         <div style={{ display: "grid", gap: 10 }}>
           {data.funil.map((e) => {
-            const meta = ETAPAS[e.chave];
+            const meta = { ...ETAPAS[e.chave], rotulo: e.chave in ETAPAS && e.chave.startsWith("D") ? rotuloEtapa(e.chave, data.prazos) : ETAPAS[e.chave].rotulo };
             return (
               <div key={e.chave} style={{ display: "grid", gridTemplateColumns: "minmax(110px, 160px) 1fr auto", gap: 12, alignItems: "center" }}>
                 <div>
@@ -200,14 +265,45 @@ export function OperationPanel({ refreshKey = 0, modo = "completo" }: { refreshK
           <article style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
               <span className="strong">Passagens do Coral</span>
-              {data.sincronizacaoCoral.configurada
-                ? <span style={pill("var(--foco-green)")}><span style={dot("var(--foco-green)")} />Busca configurada</span>
-                : <span style={pill("var(--foco-amber)")}><span style={dot("var(--foco-amber)")} />Busca não configurada</span>}
+              <span style={pill(seloSync.cor)}><span style={dot(seloSync.cor)} />{seloSync.rotulo}</span>
             </div>
             <div style={{ fontSize: 13 }}>
               Pendentes de compilação: <span className="strong">{data.passagensPendentes}</span>
             </div>
+            <div style={{ fontSize: 13, marginTop: 6 }}>
+              Última sincronização:{" "}
+              {sync.ultima ? (
+                <span className="strong">
+                  {dateTime(sync.ultima.iniciadoEm)} · {sync.ultima.status === "OK" ? `${sync.ultima.recebidas} recebida${sync.ultima.recebidas === 1 ? "" : "s"}, ${sync.ultima.importadas} nova${sync.ultima.importadas === 1 ? "" : "s"}` : sync.ultima.status === "FALHA" ? "falhou" : "em andamento"}
+                  {` (${sync.ultima.origem === "MANUAL" ? "manual" : "automática"})`}
+                </span>
+              ) : (
+                <span className="strong">nenhuma registrada</span>
+              )}
+            </div>
             <div style={{ ...muted, marginTop: 6 }}>Recebidas por envio do Coral e pela sincronização diária.</div>
+          </article>
+          <article style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+              <span className="strong">Rotina automática</span>
+              <span style={pill(seloRotina.cor)}><span style={dot(seloRotina.cor)} />{seloRotina.rotulo}</span>
+            </div>
+            <div style={{ fontSize: 13 }}>
+              {rotina.agendadorInterno ? (
+                <>Agendador interno: <span className="strong">a cada {rotina.intervaloMin} min</span></>
+              ) : (
+                <>Agendador interno: <span className="strong">desligado</span> (depende de chamada externa)</>
+              )}
+            </div>
+            <div style={{ fontSize: 13, marginTop: 6 }}>
+              Última execução:{" "}
+              <span className="strong">
+                {rotina.ultima
+                  ? `${dateTime(rotina.ultima.iniciadoEm)} · ${rotina.ultima.origem === "AGENDADOR" ? "agendador" : "chamada externa"}`
+                  : "nenhuma registrada"}
+              </span>
+            </div>
+            <div style={{ ...muted, marginTop: 6 }}>Busca passagens no Coral, avança a régua e repete integrações com falha.</div>
           </article>
         </div>
 

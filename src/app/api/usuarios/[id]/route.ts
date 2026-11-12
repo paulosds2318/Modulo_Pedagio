@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession, hasRole } from "@/lib/auth";
 import { hashPassword } from "better-auth/crypto";
+import { registrarAuditoria } from "@/lib/services/auditoria";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ export async function PUT(
     return NextResponse.json({ error: "Por segurança, não é permitido editar o próprio usuário." }, { status: 403 });
   }
 
-  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true, email: true, name: true } });
   if (!target) return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
   const isMaster = hasRole(session, "master");
   if (target.role === "master") {
@@ -75,6 +76,11 @@ export async function PUT(
       return updated;
     });
 
+    await registrarAuditoria(session, request, "EDITAR_USUARIO", {
+      entidade: "usuario",
+      entidadeId: id,
+      detalhes: { email: target.email, perfilAntes: target.role, perfilDepois: newRole, nomeAlterado: name !== target.name, senhaRedefinida: Boolean(hashedPassword) },
+    });
     return NextResponse.json({
       success: true,
       user: {
@@ -94,7 +100,7 @@ export async function PUT(
 
 // DELETE /api/usuarios/[id] - Exclui um usuário do sistema
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession();
@@ -113,7 +119,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Por segurança, não é permitido excluir o próprio usuário." }, { status: 403 });
   }
 
-  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+  const target = await db.user.findUnique({ where: { id }, select: { id: true, role: true, email: true, name: true } });
   if (!target) return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
   if (target.role === "master") return NextResponse.json({ error: "A conta master não pode ser excluída." }, { status: 403 });
   if (target.role === "admin" && !hasRole(session, "master")) {
@@ -122,6 +128,7 @@ export async function DELETE(
   try {
     // Cascade exclui contas e sessões
     await db.user.delete({ where: { id } });
+    await registrarAuditoria(session, request, "EXCLUIR_USUARIO", { entidade: "usuario", entidadeId: id, detalhes: { email: target.email, perfil: target.role } });
     return NextResponse.json({ success: true, message: "Usuário removido com sucesso." });
   } catch (error) {
     return NextResponse.json(

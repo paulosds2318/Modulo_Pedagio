@@ -152,7 +152,7 @@ export function CompilationPage() {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || "Erro ao compilar lote.");
       setNotice(
-        `Lote #${body.id} criado. Confira o historico para ver os resultados das integracoes.`
+        `Lote #${body.id} criado. Confira o histórico para ver os resultados das integrações.`
       );
       setSelected([]);
       setAll((items) => items.filter((p) => !selected.includes(p.id)));
@@ -233,7 +233,7 @@ export function CompilationPage() {
             marginBottom: "20px",
           }}
         >
-          <strong>Perfil de visualizacao:</strong> Compilacao de lotes disponivel apenas para administradores.
+          <strong>Perfil de visualização:</strong> Compilação de lotes disponível apenas para administradores.
         </div>
       )}
 

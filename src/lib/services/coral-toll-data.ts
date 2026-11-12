@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import { extractItems, validarPassagens } from "@/lib/passagem-schema";
 import { importarECompilarPassagens } from "@/lib/services/importar-passagens";
 
@@ -108,16 +109,48 @@ export function resolverPeriodo(now: Date, inicio?: string, fim?: string) {
  * Busca passagens no toll-data do Coral (mesmo contrato de POST /api/passagens) e importa/compila.
  * O idCoral é usado sem alteração, então a mesma passagem recebida pelos dois caminhos não duplica.
  */
-export async function sincronizarPassagensCoral(now = new Date(), periodo?: { startDate?: string; endDate?: string }) {
+export type OrigemSincronizacao = "CRON" | "MANUAL";
+
+export async function sincronizarPassagensCoral(
+  now = new Date(),
+  periodo?: { startDate?: string; endDate?: string },
+  origem: OrigemSincronizacao = "CRON"
+) {
+  // Período inválido é erro de quem pediu, não da integração: não entra no histórico de sincronizações.
   const { from, to } = resolverPeriodo(now, periodo?.startDate, periodo?.endDate);
-  const items = await fetchCoralTollData(from, to);
-  const { validas, rejeitadas } = validarPassagens(items);
-  const resultado = await importarECompilarPassagens(validas);
-  return {
-    periodo: { startDate: from.toISOString().slice(0, 10), endDate: to.toISOString().slice(0, 10) },
-    recebidas: items.length,
-    ...resultado,
-    rejeitadas: rejeitadas.length,
-    exemplosRejeicao: rejeitadas.slice(0, 10),
-  };
+  const periodoTexto = { startDate: from.toISOString().slice(0, 10), endDate: to.toISOString().slice(0, 10) };
+  const registro = await db.sincronizacaoCoral.create({
+    data: { origem, status: "EM_ANDAMENTO", periodoInicio: periodoTexto.startDate, periodoFim: periodoTexto.endDate },
+  });
+
+  try {
+    const items = await fetchCoralTollData(from, to);
+    const { validas, rejeitadas } = validarPassagens(items);
+    const resultado = await importarECompilarPassagens(validas);
+    await db.sincronizacaoCoral.update({
+      where: { id: registro.id },
+      data: {
+        status: "OK",
+        finalizadoEm: new Date(),
+        recebidas: items.length,
+        importadas: resultado.importadas,
+        duplicadas: resultado.duplicadas,
+        rejeitadas: rejeitadas.length,
+        lotesCompilados: resultado.lotesCompilados,
+      },
+    });
+    return {
+      periodo: periodoTexto,
+      recebidas: items.length,
+      ...resultado,
+      rejeitadas: rejeitadas.length,
+      exemplosRejeicao: rejeitadas.slice(0, 10),
+    };
+  } catch (error) {
+    const mensagem = error instanceof Error ? error.message.replace(/^CONFIG:\s*/, "") : "Falha desconhecida.";
+    await db.sincronizacaoCoral
+      .update({ where: { id: registro.id }, data: { status: "FALHA", finalizadoEm: new Date(), erro: mensagem.slice(0, 1000) } })
+      .catch(() => undefined);
+    throw error;
+  }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { OperationPanel } from "@/components/operation-panel";
 import { useSession } from "@/lib/auth-client";
 
@@ -21,110 +21,101 @@ const money = (c: number) =>
     c / 100
   );
 
-async function fetchDashboardData() {
-  const passagesResponse = await fetch("/api/passagens/pendentes");
-  const passagesData = await passagesResponse.json().catch(() => null);
-  if (!passagesResponse.ok) throw new Error(passagesData?.error || "N\u00e3o foi poss\u00edvel consultar as passagens pendentes.");
-  if (!Array.isArray(passagesData)) throw new Error("O servidor retornou dados inv\u00e1lidos para as passagens pendentes.");
+const LIST_LIMIT = 10;
+type Resumo = { passagensPendentes: number; emRegua: number; pagos: number; abertoCentavos: number };
 
-  const firstResponse = await fetch("/api/lotes?page=1&limit=100");
-  const firstResult = await firstResponse.json().catch(() => null);
-  if (!firstResponse.ok) throw new Error(firstResult?.error || "N\u00e3o foi poss\u00edvel consultar os lotes.");
-  if (!firstResult || !Array.isArray(firstResult.data) || !firstResult.pagination) {
-    throw new Error("O servidor retornou dados inv\u00e1lidos para os lotes.");
+/** Números da visão geral, já somados no servidor (/api/painel). */
+async function fetchResumo(): Promise<Resumo> {
+  const response = await fetch("/api/painel", { cache: "no-store" });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body?.funil) throw new Error(body?.error || "Não foi possível carregar os indicadores.");
+  const funil = body.funil as Array<{ chave: string; quantidade: number; valorCentavos: number }>;
+  const emRegua = funil.filter((e) => e.chave.startsWith("D")).reduce((s, e) => s + e.quantidade, 0);
+  const pagos = funil.find((e) => e.chave === "PAGO")?.quantidade ?? 0;
+  const abertoCentavos = funil.filter((e) => e.chave !== "PAGO").reduce((s, e) => s + e.valorCentavos, 0);
+  return { passagensPendentes: body.passagensPendentes, emRegua, pagos, abertoCentavos };
+}
+
+/** Lotes mais recentes com os filtros aplicados no servidor (/api/lotes). */
+async function fetchLotes(search: string, status: string, date: string): Promise<{ lots: Lot[]; total: number }> {
+  const params = new URLSearchParams({ page: "1", limit: String(LIST_LIMIT) });
+  if (search.trim()) params.set("search", search.trim());
+  if (status !== "TODOS") params.set("status", status);
+  if (date) {
+    params.set("dataInicio", date);
+    params.set("dataFim", date);
   }
-
-  const lots: Lot[] = [...firstResult.data];
-  const totalPages = Number(firstResult.pagination.totalPages) || 1;
-  for (let page = 2; page <= totalPages; page += 1) {
-    const response = await fetch(`/api/lotes?page=${page}&limit=100`);
-    const result = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(result?.error || `N\u00e3o foi poss\u00edvel consultar a p\u00e1gina ${page} de lotes.`);
-    if (!result || !Array.isArray(result.data)) throw new Error(`O servidor retornou dados inv\u00e1lidos na p\u00e1gina ${page} de lotes.`);
-    lots.push(...result.data);
-  }
-
-  return { passagesCount: passagesData.length, lots };
+  const response = await fetch(`/api/lotes?${params}`, { cache: "no-store" });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(body?.data)) throw new Error(body?.error || "Não foi possível consultar os lotes.");
+  return { lots: body.data, total: Number(body.pagination?.total) || body.data.length };
 }
 
 export function TollDashboard() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const isAdmin = role === "admin" || role === "master";
-  const [passages, setPassages] = useState(0);
+  const [resumo, setResumo] = useState<Resumo | null>(null);
   const [lots, setLots] = useState<Lot[]>([]);
+  const [totalLots, setTotalLots] = useState(0);
   const [error, setError] = useState("");
   const [refreshNotice, setRefreshNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
   const [panelKey, setPanelKey] = useState(0);
 
-  // Filtros rápidos da Visão Geral
+  // Filtros rápidos da Visão Geral (aplicados no servidor)
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [dateFilter, setDateFilter] = useState("");
 
   useEffect(() => {
-    Promise.all([fetch("/api/passagens/pendentes"), fetch("/api/lotes?page=1&limit=100")])
-      .then(async ([p, l]) => {
-        if (!p.ok || !l.ok) {
-          throw new Error(
-            "Não foi possível carregar os dados de pedágio. Verifique a conexão com o banco de dados."
-          );
-        }
-        const lotsData = await l.json();
-        setPassages((await p.json()).length);
-        setLots(Array.isArray(lotsData) ? lotsData : (lotsData.data || []));
-      })
-      .catch((e) => setError(e.message))
+    fetchResumo()
+      .then(setResumo)
+      .catch((e) => setError(e instanceof Error ? e.message : "Erro ao carregar os indicadores."))
       .finally(() => setLoading(false));
   }, []);
 
+  // Lista: espera a digitação parar (300 ms) antes de consultar.
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setListLoading(true);
+      fetchLotes(search, statusFilter, dateFilter)
+        .then(({ lots: next, total }) => {
+          if (!active) return;
+          setLots(next);
+          setTotalLots(total);
+        })
+        .catch((e) => active && setError(e instanceof Error ? e.message : "Erro ao consultar os lotes."))
+        .finally(() => active && setListLoading(false));
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [search, statusFilter, dateFilter, panelKey]);
+
   async function refreshDashboard() {
     setLoading(true);
-    setPanelKey((k) => k + 1);
     setError("");
     setRefreshNotice("");
     try {
-      const { passagesCount: nextPassages, lots: nextLots } = await fetchDashboardData();
-      const hasChanges = passages !== nextPassages || JSON.stringify(lots) !== JSON.stringify(nextLots);
-
-      setPassages(nextPassages);
-      setLots(nextLots);
+      const next = await fetchResumo();
+      const hasChanges = JSON.stringify(next) !== JSON.stringify(resumo);
+      setResumo(next);
+      setPanelKey((k) => k + 1);
       setRefreshNotice(
         hasChanges
-          ? "Vis\u00e3o geral atualizada com novos dados."
-          : "Nenhuma altera\u00e7\u00e3o encontrada. A vis\u00e3o geral j\u00e1 est\u00e1 atualizada."
+          ? "Visão geral atualizada com novos dados."
+          : "Nenhuma alteração encontrada. A visão geral já está atualizada."
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Erro ao atualizar a vis\u00e3o geral.");
+      setError(cause instanceof Error ? cause.message : "Erro ao atualizar a visão geral.");
     } finally {
       setLoading(false);
     }
   }
-  const openLots = lots.filter((lot) => lot.status === "EM_REGUA");
-  const paidLots = lots.filter((lot) => lot.status === "PAGO");
-  const outstanding = lots
-    .filter((lot) => lot.status !== "PAGO")
-    .reduce((sum, lot) => sum + lot.valorFinalCentavos, 0);
-
-  // Filtragem rápida local dos lotes
-  const filteredLots = useMemo(() => {
-    return lots.filter((l) => {
-      const matchSearch =
-        !search.trim() ||
-        l.numeroContrato.toLowerCase().includes(search.toLowerCase()) ||
-        String(l.id).includes(search);
-
-      const matchStatus = statusFilter === "TODOS" || l.status === statusFilter;
-
-      const matchDate =
-        !dateFilter ||
-        l.dataCriacao.slice(0, 10) === dateFilter ||
-        (l.dataPagamento && l.dataPagamento.slice(0, 10) === dateFilter);
-
-      return matchSearch && matchStatus && matchDate;
-    });
-  }, [lots, search, statusFilter, dateFilter]);
 
   return (
     <main className="shell">
@@ -135,7 +126,7 @@ export function TollDashboard() {
           </span>
           <h1>Visão Geral da Operação</h1>
           <p>
-            Monitoramento diario de passagens, conciliacao de pagamentos e esteira de cobranca.
+            Monitoramento diário de passagens, conciliação de pagamentos e esteira de cobrança.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -164,21 +155,21 @@ export function TollDashboard() {
       <section className="summary">
         <article>
           <span>Passagens Pendentes</span>
-          <strong>{loading ? "…" : passages}</strong>
+          <strong>{loading || !resumo ? "…" : resumo.passagensPendentes}</strong>
           <small>Aguardando compilação de lote</small>
         </article>
 
         <article>
           <span>Lotes em Cobrança</span>
-          <strong>{loading ? "…" : openLots.length}</strong>
+          <strong>{loading || !resumo ? "…" : resumo.emRegua}</strong>
           <small>Régua ativa (D+0 a D+10)</small>
         </article>
 
         <article>
           <span>Valor em Aberto</span>
-          <strong>{loading ? "…" : money(outstanding)}</strong>
+          <strong>{loading || !resumo ? "…" : money(resumo.abertoCentavos)}</strong>
           <small>
-            {paidLots.length} lote{paidLots.length === 1 ? "" : "s"} já liquidado{paidLots.length === 1 ? "" : "s"}
+            {resumo?.pagos ?? 0} lote{resumo?.pagos === 1 ? "" : "s"} já liquidado{resumo?.pagos === 1 ? "" : "s"}
           </small>
         </article>
       </section>
@@ -189,7 +180,10 @@ export function TollDashboard() {
         <div className="panel-head" style={{ flexWrap: "wrap", gap: "16px" }}>
           <div>
             <h2>Lotes Gerados na Operação</h2>
-            <p>Filtragem rápida e acompanhamento diário com data de emissão e liquidação.</p>
+            <p>
+              Os {LIST_LIMIT} mais recentes dos filtros abaixo
+              {!listLoading && totalLots > lots.length ? ` · mostrando ${lots.length} de ${totalLots}` : ""}. A data filtra pela emissão do lote.
+            </p>
           </div>
           <Link href="/lotes" className="button secondary">
             Ver todos com paginação completa →
@@ -272,8 +266,8 @@ export function TollDashboard() {
               </tr>
             </thead>
             <tbody>
-              {filteredLots.length ? (
-                filteredLots.slice(0, 10).map((l) => (
+              {lots.length ? (
+                lots.map((l) => (
                   <tr key={l.id}>
                     <td className="strong">#{l.id}</td>
                     <td>
@@ -315,7 +309,7 @@ export function TollDashboard() {
               ) : (
                 <tr>
                   <td colSpan={9} className="empty" style={{ padding: "32px", textAlign: "center" }}>
-                    {loading
+                    {listLoading
                       ? "Carregando lotes..."
                       : "Nenhum lote corresponde aos filtros aplicados."}
                   </td>
@@ -339,6 +333,18 @@ export function TollDashboard() {
           <Link className="quick-link" href="/usuarios">
             <strong>Gestão de Usuários</strong>
             <span>Cadastre, edite e defina o perfil de acesso de quem usa o módulo.</span>
+          </Link>
+        )}
+        {isAdmin && (
+          <Link className="quick-link" href="/configuracoes/regua">
+            <strong>Prazos da Régua</strong>
+            <span>Defina em quantos dias após a emissão acontecem as tentativas no cartão e o lembrete.</span>
+          </Link>
+        )}
+        {isAdmin && (
+          <Link className="quick-link" href="/auditoria">
+            <strong>Auditoria</strong>
+            <span>Consulte quem compilou lotes, consultou a Adyen, exportou relatórios ou alterou usuários.</span>
           </Link>
         )}
       </section>

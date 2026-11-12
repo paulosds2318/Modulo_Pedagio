@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "@/lib/auth";
 import { tollDataUrl } from "@/lib/services/coral-toll-data";
+import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { agendadorLigado, intervaloAgendadorMin } from "@/lib/agendador";
 
 export const runtime = "nodejs";
 
@@ -17,7 +19,8 @@ export async function GET() {
 
   const now = Date.now();
   try {
-    const [porEtapa, passagensPendentes, outbox, lotesSemLink, alertas] = await Promise.all([
+    const sincronizacaoSelect = { id: true, origem: true, status: true, iniciadoEm: true, finalizadoEm: true, recebidas: true, importadas: true, lotesCompilados: true, erro: true } as const;
+    const [porEtapa, passagensPendentes, outbox, lotesSemLink, alertas, ultimaSincronizacao, ultimaComSucesso, prazos, ultimaRotina, ultimaRotinaOk] = await Promise.all([
       db.loteCobranca.groupBy({ by: ["status", "etapaRegua"], _count: { _all: true }, _sum: { valorFinalCentavos: true } }),
       db.passagemPedagio.count({ where: { loteId: null } }),
       db.integrationOutbox.groupBy({ by: ["tipo", "status"], _count: { _all: true } }),
@@ -36,7 +39,13 @@ export async function GET() {
         orderBy: { dataHora: "desc" },
         take: 20,
       }),
+      db.sincronizacaoCoral.findFirst({ orderBy: { iniciadoEm: "desc" }, select: sincronizacaoSelect }),
+      db.sincronizacaoCoral.findFirst({ where: { status: "OK" }, orderBy: { iniciadoEm: "desc" }, select: sincronizacaoSelect }),
+      obterPrazosRegua(),
+      db.execucaoRotina.findFirst({ orderBy: { iniciadoEm: "desc" }, select: { origem: true, status: true, iniciadoEm: true, finalizadoEm: true, erro: true } }),
+      db.execucaoRotina.findFirst({ where: { status: { in: ["OK", "PARCIAL"] } }, orderBy: { iniciadoEm: "desc" }, select: { iniciadoEm: true } }),
     ]);
+    const intervaloMin = intervaloAgendadorMin();
 
     // Funil: lotes em régua por etapa, depois inadimplentes e pagos.
     const soma = (filtro: (g: (typeof porEtapa)[number]) => boolean) =>
@@ -69,7 +78,21 @@ export async function GET() {
       passagensPendentes,
       funil,
       integracoes,
-      sincronizacaoCoral: { configurada: Boolean(tollDataUrl()) },
+      sincronizacaoCoral: {
+        configurada: Boolean(tollDataUrl()),
+        ultima: ultimaSincronizacao,
+        ultimaComSucesso,
+        // Sem sucesso há mais de 26 h (rotina diária + folga) ou última execução com falha.
+        atrasada: Boolean(tollDataUrl()) && (!ultimaComSucesso || now - ultimaComSucesso.iniciadoEm.getTime() > 26 * 60 * 60_000),
+      },
+      rotina: {
+        agendadorInterno: agendadorLigado(),
+        intervaloMin,
+        ultima: ultimaRotina,
+        // Atrasada: sem execução concluída há mais de 2 intervalos (agendador interno) ou 26 h (cron externo diário).
+        atrasada: !ultimaRotinaOk || now - ultimaRotinaOk.iniciadoEm.getTime() > (agendadorLigado() ? 2 * intervaloMin * 60_000 : 26 * 60 * 60_000),
+      },
+      prazos: { diasPrimeiraTentativa: prazos.diasPrimeiraTentativa, diasLembrete: prazos.diasLembrete, diasSegundaTentativa: prazos.diasSegundaTentativa },
       lotesSemLink,
       alertas,
     });

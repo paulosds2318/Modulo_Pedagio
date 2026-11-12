@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
 import { linhaDoTempo, loadLotes, porLoja, totalizar, type Totais } from "@/lib/server/painel-data";
 import { safeText, styleHeader } from "@/lib/server/spreadsheet";
+import { registrarAuditoria } from "@/lib/services/auditoria";
+import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { rotuloEtapa } from "@/lib/regua-config";
 import {
-  ETAPAS,
   SITUACOES,
   UNIT_LABELS,
   formatDateTime,
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
   const filters = parsePainelFilters(params);
   const previous = previousFilters(filters);
   try {
-    const [lotes, anteriores] = await Promise.all([loadLotes(filters), previous ? loadLotes(previous) : null]);
+    const [lotes, anteriores, prazos] = await Promise.all([loadLotes(filters), previous ? loadLotes(previous) : null, obterPrazosRegua()]);
     const totals = totalizar(lotes);
     const before: Totais | null = anteriores ? totalizar(anteriores) : null;
     const timeline = linhaDoTempo(lotes, filters);
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
     resumo.addRow(["Período", periodLabel(filters)]);
     resumo.addRow(["Loja", filters.loja ? safeText(filters.loja) : "Todas"]);
     resumo.addRow(["Situação", filters.situacao ? SITUACOES[filters.situacao] : "Todas"]);
-    resumo.addRow(["Etapa da régua", filters.etapa ? ETAPAS[filters.etapa] : "Todas"]);
+    resumo.addRow(["Etapa da régua", filters.etapa ? rotuloEtapa(filters.etapa, prazos) : "Todas"]);
     resumo.addRow(["Gerado em", formatDateTime(new Date())]);
 
     const lojas = workbook.addWorksheet("Por loja");
@@ -132,7 +134,7 @@ export async function GET(request: NextRequest) {
         passagens: l.quantidadePassagens,
         valor: reais(l.valorFinalCentavos),
         situacao: SITUACOES[l.status] ?? safeText(l.status),
-        etapa: ETAPAS[l.etapaRegua] ?? safeText(l.etapaRegua),
+        etapa: rotuloEtapa(l.etapaRegua, prazos),
         emitido: formatDateTime(l.dataCriacao),
         pago: l.dataPagamento ? formatDateTime(l.dataPagamento) : "",
       });
@@ -140,6 +142,9 @@ export async function GET(request: NextRequest) {
     styleHeader(lista);
 
     const bytes = await workbook.xlsx.writeBuffer();
+    await registrarAuditoria(session, request, "EXPORTAR_RELATORIO", {
+      detalhes: { periodo: periodLabel(filters), loja: filters.loja ?? null, situacao: filters.situacao ?? null, etapa: filters.etapa ?? null, lotes: lotes.length },
+    });
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

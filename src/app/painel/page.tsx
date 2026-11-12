@@ -23,6 +23,8 @@ import { RefreshPageButton } from "@/components/refresh-page-button";
 import { LinkPagination } from "@/components/link-pagination";
 import { TimelineChart } from "@/components/timeline-chart";
 import { OperationPanel } from "@/components/operation-panel";
+import { obterPrazosRegua } from "@/lib/services/config-regua";
+import { rotuloEtapa } from "@/lib/regua-config";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 20;
@@ -35,7 +37,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
   const page = pageParam(params, "p");
   const previous = previousFilters(filters);
 
-  const [lotes, lotesAnteriores, lojas] = await Promise.all([loadLotes(filters), previous ? loadLotes(previous) : null, listarLojas()]);
+  const [lotes, lotesAnteriores, lojas, prazos] = await Promise.all([loadLotes(filters), previous ? loadLotes(previous) : null, listarLojas(), obterPrazosRegua()]);
   const totals = totalizar(lotes);
   const before: Totais | null = lotesAnteriores ? totalizar(lotesAnteriores) : null;
   const lojasResumo = porLoja(lotes);
@@ -152,9 +154,9 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
             Etapa da régua
             <select name="etapa" defaultValue={filters.etapa ?? ""}>
               <option value="">Todas</option>
-              {Object.entries(ETAPAS).map(([value, text]) => (
+              {Object.keys(ETAPAS).map((value) => (
                 <option key={value} value={value}>
-                  {text}
+                  {rotuloEtapa(value, prazos)}
                 </option>
               ))}
             </select>
@@ -273,7 +275,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
                   <td>{money(lote.valorFinalCentavos)}</td>
                   <td>
                     <span className="dashboard-status">{SITUACOES[lote.status] ?? lote.status}</span>
-                    {lote.status === "EM_REGUA" && <span className="subcell">Etapa {ETAPAS[lote.etapaRegua] ?? lote.etapaRegua}</span>}
+                    {lote.status === "EM_REGUA" && <span className="subcell">Etapa {rotuloEtapa(lote.etapaRegua, prazos)}</span>}
                   </td>
                   <td>{formatDateTime(lote.dataCriacao)}</td>
                   <td>

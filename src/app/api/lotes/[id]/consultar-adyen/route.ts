@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getPaymentLink } from "@/lib/adyen";
 import { getServerSession } from "@/lib/auth";
+import { registrarAuditoria } from "@/lib/services/auditoria";
 
 export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const session = await getServerSession();
   if (!session) return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
 
@@ -63,6 +64,11 @@ export async function POST(_request: Request, context: RouteContext) {
       });
     }
 
+    await registrarAuditoria(session, request, "CONSULTAR_ADYEN", {
+      entidade: "lote",
+      entidadeId: id,
+      detalhes: { statusAdyen: paymentLink.status, statusLoteAntes: lot.status, statusLoteDepois: statusLocal },
+    });
     return NextResponse.json({ statusAdyen: paymentLink.status, statusLote: statusLocal });
   } catch {
     return NextResponse.json({ error: "Falha ao consultar o status do pagamento." }, { status: 503 });

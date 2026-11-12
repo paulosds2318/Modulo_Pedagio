@@ -11,9 +11,9 @@ function parseId(raw: string) {
 }
 export async function GET(_request: Request, context: RouteContext) {
   const session = await getServerSession();
-  if (!session) return NextResponse.json({ error: "Autenticacao necessaria." }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
   const id = parseId((await context.params).id);
-  if (!id) return NextResponse.json({ error: "ID de lote invalido." }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "ID de lote inválido." }, { status: 400 });
 
   try {
     const lot = await db.loteCobranca.findUnique({
@@ -43,8 +43,8 @@ export async function GET(_request: Request, context: RouteContext) {
           ...lot,
           logs: lot.logs.map((log) => ({ ...log, detalhesResposta: "Detalhes disponíveis apenas para administradores." })),
         })
-      : NextResponse.json({ error: "Lote nao encontrado." }, { status: 404 });
+      : NextResponse.json({ error: "Lote não encontrado." }, { status: 404 });
   } catch {
-    return NextResponse.json({ error: "Banco de dados indisponivel." }, { status: 503 });
+    return NextResponse.json({ error: "Banco de dados indisponível." }, { status: 503 });
   }
 }

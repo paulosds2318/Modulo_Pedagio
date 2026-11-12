@@ -37,10 +37,13 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 
 ## Páginas
 
-- `/`: indicadores e lotes recentes.
+- `/`: indicadores, alertas e os lotes mais recentes (números calculados no servidor); atalhos de administração.
 - `/compilacao`: consulta passagens pendentes e permite compilação manual quando um grupo não pôde ser compilado automaticamente.
 - `/lotes`: busca e filtro por status.
 - `/lotes/[id]`: detalhes, passagens, link, eventos da régua e consulta sob demanda do status Adyen.
+- `/painel`: painel de acompanhamento por período, loja, situação e etapa, com comparação ao período anterior, gráfico, tabela por loja, funil da régua, saúde das integrações (inclui a última sincronização com o Coral) e exportação em Excel.
+- `/configuracoes/regua` (administradores): prazos da régua em dias após a emissão (padrão D+5, D+7 e D+10), usados pela rotina diária.
+- `/auditoria` (administradores): registro de compilações manuais, consultas à Adyen, sincronizações manuais, exportações, alterações de prazos e de usuários.
 
 ## Integrações e contratos canônicos
 
@@ -49,7 +52,7 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 - `POST /api/passagens`: recebe do Coral de 1 a 500 passagens no formato `{idCoral, numeroContrato, cpfCliente, telefoneCliente?, placa, tag, praca, rodovia, dataHora, valorCentavos, lojaRetirada}`. Exige `Authorization: Bearer CORAL_PASSAGES_SYNC_SECRET`. Após importar, compila automaticamente as passagens pendentes daquele envio, agrupadas por contrato e CPF, e inicia a etapa D+0. `idCoral` é único; reenvios não duplicam passagens nem lotes já criados. Se um grupo for inválido, ele permanece pendente e a resposta informa a falha para permitir correção e compilação manual. `valorCentavos` deve ser inteiro em centavos.
 - `POST /api/passagens/sincronizar`: busca passagens no Coral em `GET /api/fleet/management/tag/public/events/conectcar/toll-data` (configurada por `CORAL_TOLL_DATA_URL`). O Coral deve devolver o mesmo contrato de `POST /api/passagens` (todos os campos obrigatórios, `valorCentavos` inteiro, `dataHora` com fuso, CPF só dígitos); registros fora do contrato são rejeitados e informados na resposta. O `idCoral` é preservado, então a mesma passagem recebida pelos dois caminhos não duplica. Aceita sessão de administrador ou `Authorization: Bearer CRON_SECRET`; também roda no cron diário e pelo botão "Sincronizar Coral" em `/compilacao`. Sem corpo, busca os últimos `CORAL_TOLL_DATA_LOOKBACK_DAYS` dias (padrão 7); para recuperar um período passado, envie `{"startDate":"AAAA-MM-DD","endDate":"AAAA-MM-DD"}` (até 31 dias, limite do Coral). Todas as páginas da resposta (`{data:{total,page,pageSize,data}}`) são lidas.
 - `POST /api/lotes/compilar`: cria o lote e grava tarefas D+0 numa outbox persistente. Tenta executá-las imediatamente; falhas temporárias são repetidas pelo cron com espera crescente e até 10 tentativas. Tarefas sem configuração de integração aguardam configuração e são verificadas diariamente.
-- `GET` ou `POST /api/cron/regua`: executar diariamente com `Authorization: Bearer CRON_SECRET`. Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
+- Rotina automática: com `AGENDADOR_INTERNO=true` o próprio módulo roda a rotina a cada `AGENDADOR_INTERVALO_MIN` minutos (padrão 60), sem configurar nada na AWS. Alternativa: chamar `GET` ou `POST /api/cron/regua` com `Authorization: Bearer CRON_SECRET` (cron-job.org, EventBridge…). Processa D+5 (tentativa no cartão), D+7 (lembrete WhatsApp) e D+10 (segunda tentativa); requer que a consulta de token Coral esteja configurada.
 - `POST /api/webhooks/adyen`: exige HMAC configurado em `ADYEN_HMAC_KEY`.
 - `POST /api/webhooks/whatsapp`: contrato `{messageId,status,details?}` e `Authorization: Bearer WHATSAPP_WEBHOOK_TOKEN`.
 - `GET /api/lotes/[id]`: retorna lote, passagens e auditoria.
