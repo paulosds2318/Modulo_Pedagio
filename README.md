@@ -43,7 +43,7 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 - `/lotes/[id]`: detalhes, passagens, link, eventos da régua e consulta sob demanda do status Adyen.
 - `/painel`: painel de acompanhamento por período, loja, situação e etapa, com comparação ao período anterior, gráfico, tabela por loja, funil da régua, saúde das integrações (inclui a última sincronização com o Coral) e exportação em Excel.
 - `/configuracoes/regua` (administradores): prazos da régua em dias após a emissão (padrão D+5, D+7 e D+10), usados pela rotina diária.
-- `/auditoria` (administradores): registro de compilações manuais, consultas à Adyen, sincronizações manuais, exportações, alterações de prazos e de usuários.
+- `/auditoria` (somente o administrador master): registro de compilações manuais, consultas à Adyen, sincronizações manuais, exportações, alterações de prazos e de usuários.
 
 ## Integrações e contratos canônicos
 

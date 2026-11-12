@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "@/lib/auth-client";
 import { FORMAS_BAIXA_MANUAL, FORMAS_PAGAMENTO, STATUS_PERMITEM_BAIXA, reaisParaCentavos } from "@/lib/baixa-manual";
+import { MOTIVOS_CANCELAMENTO, STATUS_PERMITEM_CANCELAMENTO } from "@/lib/cancelamento";
 import { formatCpf, formatPhone } from "@/lib/pii";
 import { PRAZOS_PADRAO, rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
 type Entry = {
@@ -37,6 +38,10 @@ type Lot = {
   baixaManual: boolean;
   baixaObservacao: string | null;
   baixaPor: string | null;
+  canceladoEm: string | null;
+  cancelamentoMotivo: string | null;
+  cancelamentoObservacao: string | null;
+  canceladoPor: string | null;
   passagens: {
     id: number;
     placa: string;
@@ -67,6 +72,10 @@ export function LotDetailPage() {
   const [salvandoBaixa, setSalvandoBaixa] = useState(false);
   const [baixaErro, setBaixaErro] = useState("");
   const [baixa, setBaixa] = useState({ forma: "PIX", dataPagamento: "", valor: "", observacao: "" });
+  const [cancelAberto, setCancelAberto] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
+  const [cancelErro, setCancelErro] = useState("");
+  const [cancelamento, setCancelamento] = useState({ motivo: "CONTESTACAO", observacao: "" });
   const [lot, setLot] = useState<Lot | null>(null);
   const [prazos, setPrazos] = useState<PrazosRegua>(PRAZOS_PADRAO);
   const stages = buildStages(prazos);
@@ -125,6 +134,7 @@ export function LotDetailPage() {
     const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
     setBaixa({ forma: "PIX", dataPagamento: hoje, valor: (lot.valorFinalCentavos / 100).toFixed(2).replace(".", ","), observacao: "" });
     setBaixaErro("");
+    setCancelAberto(false);
     setBaixaAberta(true);
     window.setTimeout(() => document.getElementById("baixa")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
@@ -153,6 +163,39 @@ export function LotDetailPage() {
       setBaixaErro(cause instanceof Error ? cause.message : "Erro ao registrar a baixa.");
     } finally {
       setSalvandoBaixa(false);
+    }
+  }
+
+  function abrirCancelamento() {
+    setCancelamento({ motivo: "CONTESTACAO", observacao: "" });
+    setCancelErro("");
+    setBaixaAberta(false);
+    setCancelAberto(true);
+    window.setTimeout(() => document.getElementById("cancelar")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  async function cancelarLote(event: FormEvent) {
+    event.preventDefault();
+    if (!lot) return;
+    setCancelErro("");
+    if (cancelamento.observacao.trim().length < 5) return setCancelErro("Explique o cancelamento na observação.");
+    if (!window.confirm(`Cancelar o lote #${lot.id} (${money(lot.valorFinalCentavos)})? A régua de cobrança será encerrada e o lote não poderá ser reativado.`)) return;
+    setCancelando(true);
+    try {
+      const response = await fetch(`/api/lotes/${params.id}/cancelar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cancelamento),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Não foi possível cancelar o lote.");
+      await reload();
+      setCancelAberto(false);
+      setQueryMessage("Lote cancelado. A régua de cobrança foi encerrada.");
+    } catch (cause) {
+      setCancelErro(cause instanceof Error ? cause.message : "Erro ao cancelar o lote.");
+    } finally {
+      setCancelando(false);
     }
   }
 
@@ -234,6 +277,7 @@ export function LotDetailPage() {
   const canQueryAdyen = Boolean(lot.adyenLinkId && lot.status !== "PAGO");
   const podeDarBaixa = isAdmin && STATUS_PERMITEM_BAIXA.includes(lot.status);
   const inadimplente = lot.status === "INADIMPLENTE";
+  const podeCancelar = isAdmin && STATUS_PERMITEM_CANCELAMENTO.includes(lot.status);
   return (
     <main className="shell">
       <div className="backline">
@@ -268,6 +312,18 @@ export function LotDetailPage() {
               {lot.baixaPor && ` · por ${lot.baixaPor}`}
             </p>
           )}
+          {lot.status === "CANCELADO" && (
+            <p>
+              Cancelado{lot.canceladoEm && ` em ${new Date(lot.canceladoEm).toLocaleString("pt-BR")}`}
+              {lot.canceladoPor && ` por ${lot.canceladoPor}`}
+              {lot.cancelamentoMotivo && (
+                <>
+                  {" · "}Motivo: <span className="strong">{MOTIVOS_CANCELAMENTO[lot.cancelamentoMotivo] ?? lot.cancelamentoMotivo}</span>
+                </>
+              )}
+              {lot.cancelamentoObservacao && ` · ${lot.cancelamentoObservacao}`}
+            </p>
+          )}
         </div>
         <div className="page-heading-actions">
             <button
@@ -286,6 +342,11 @@ export function LotDetailPage() {
           {podeDarBaixa && (
             <button type="button" className={`button ${inadimplente ? "primary" : "secondary"}`} onClick={abrirBaixa}>
               Registrar baixa manual
+            </button>
+          )}
+          {podeCancelar && (
+            <button type="button" className="button secondary" onClick={abrirCancelamento}>
+              Cancelar lote
             </button>
           )}
           <span className={`status status-${lot.status.toLowerCase()}`}>
@@ -356,6 +417,55 @@ export function LotDetailPage() {
           <p style={{ color: "var(--muted)", fontSize: 13, margin: "10px 0 0" }}>
             Valor devido: <span className="strong">{money(lot.valorFinalCentavos)}</span>. Se o valor recebido for diferente (acordo), explique na observação.
           </p>
+        </section>
+      )}
+      {cancelAberto && podeCancelar && (
+        <section className="panel" id="cancelar">
+          <div className="panel-head">
+            <div>
+              <h2>Cancelar lote</h2>
+              <p>
+                Para cobranças geradas por engano, contestadas ou isentas. A régua é encerrada, as tarefas pendentes são canceladas e o lote não entra
+                no valor cobrado do painel. Fica registrado no histórico e na auditoria.
+              </p>
+            </div>
+          </div>
+          {cancelErro && <div className="notice error-notice" role="alert">{cancelErro}</div>}
+          {lot.adyenPaymentUrl && (
+            <div className="notice" role="status">
+              O link de pagamento já enviado ao cliente continua válido no Coral/Adyen. Se o cliente pagar mesmo assim, o pagamento é registrado normalmente.
+            </div>
+          )}
+          <form onSubmit={cancelarLote} className="filter-bar" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+            <label className="filter-field">
+              Motivo
+              <select value={cancelamento.motivo} onChange={(e) => setCancelamento((c) => ({ ...c, motivo: e.target.value }))} disabled={cancelando}>
+                {Object.entries(MOTIVOS_CANCELAMENTO).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field" style={{ flex: "1 1 360px" }}>
+              Observação
+              <input
+                required
+                minLength={5}
+                maxLength={500}
+                placeholder="Ex.: cliente comprovou que não passou na praça; protocolo 123…"
+                value={cancelamento.observacao}
+                onChange={(e) => setCancelamento((c) => ({ ...c, observacao: e.target.value }))}
+                disabled={cancelando}
+              />
+            </label>
+            <button className="button primary" type="submit" disabled={cancelando}>
+              {cancelando ? "Cancelando…" : "Confirmar cancelamento"}
+            </button>
+            <button className="button secondary" type="button" onClick={() => setCancelAberto(false)} disabled={cancelando}>
+              Voltar
+            </button>
+          </form>
         </section>
       )}
       <section className="summary">

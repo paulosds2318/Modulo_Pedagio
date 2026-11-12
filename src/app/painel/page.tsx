@@ -67,7 +67,9 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
     {
       label: "Lotes emitidos",
       value: String(totals.lotes),
-      detail: `${totals.passagens} passage${totals.passagens === 1 ? "m" : "ns"} de pedágio no período`,
+      detail:
+        `${totals.passagens} passage${totals.passagens === 1 ? "m" : "ns"} de pedágio no período` +
+        (totals.cancelados ? ` · ${totals.cancelados} cancelado${totals.cancelados === 1 ? "" : "s"} (${money(totals.canceladoCentavos)})` : ""),
       change: change(totals.lotes, before?.lotes),
     },
     {

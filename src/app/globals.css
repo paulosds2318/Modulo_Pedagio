@@ -678,6 +678,13 @@ td input[type="checkbox"] {
   border-color: #FECACA;
 }
 
+.status-cancelado {
+  background: var(--line-subtle);
+  color: var(--muted);
+  border-color: var(--line);
+  text-decoration: line-through;
+}
+
 .status-pendente {
   background: #F3F4F6;
   color: #4B5563;

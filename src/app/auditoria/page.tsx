@@ -36,7 +36,7 @@ function detalhesLegiveis(raw: string | null) {
 export default async function AuditoriaPage({ searchParams }: { searchParams: Promise<Params> }) {
   const session = await getServerSession();
   if (!session) redirect("/login?redirect=/auditoria");
-  if (!hasRole(session, "admin")) redirect("/");
+  if (!hasRole(session, "master")) redirect("/");
 
   const params = await searchParams;
   const acao = text(params, "acao");
@@ -74,7 +74,7 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
     <main className="shell dashboard-shell">
       <header className="dashboard-heading">
         <div>
-          <span className="eyebrow">Administração</span>
+          <span className="eyebrow">Administração · Master</span>
           <h1>Auditoria</h1>
           <p>Quem fez o quê no módulo: compilações manuais, consultas à Adyen, sincronizações, exportações, prazos e usuários.</p>
         </div>

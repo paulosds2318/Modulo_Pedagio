@@ -6,7 +6,7 @@
 export const PERIODS = { hoje: "Hoje", "7dias": "Últimos 7 dias", "30dias": "Últimos 30 dias" } as const;
 export type Period = keyof typeof PERIODS;
 
-export const SITUACOES: Record<string, string> = { EM_REGUA: "Em régua", PAGO: "Pago", INADIMPLENTE: "Inadimplente" };
+export const SITUACOES: Record<string, string> = { EM_REGUA: "Em régua", PAGO: "Pago", INADIMPLENTE: "Inadimplente", CANCELADO: "Cancelado" };
 export const ETAPAS: Record<string, string> = { D0: "D+0", D5: "D+5", D7: "D+7", D10: "D+10" };
 
 const DAY_MS = 24 * 60 * 60 * 1000;

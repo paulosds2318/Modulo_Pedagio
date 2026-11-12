@@ -221,6 +221,7 @@ export function LotsPage() {
                 <option value="PAGO">Pago / Liquidado</option>
                 <option value="EM_REGUA">Em régua ativa</option>
                 <option value="INADIMPLENTE">Inadimplente</option>
+                <option value="CANCELADO">Cancelado</option>
                 <option value="PENDENTE">Pendente</option>
               </select>
             </label>

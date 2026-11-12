@@ -32,7 +32,7 @@ async function fetchResumo(): Promise<Resumo> {
   const funil = body.funil as Array<{ chave: string; quantidade: number; valorCentavos: number }>;
   const emRegua = funil.filter((e) => e.chave.startsWith("D")).reduce((s, e) => s + e.quantidade, 0);
   const pagos = funil.find((e) => e.chave === "PAGO")?.quantidade ?? 0;
-  const abertoCentavos = funil.filter((e) => e.chave !== "PAGO").reduce((s, e) => s + e.valorCentavos, 0);
+  const abertoCentavos = funil.filter((e) => e.chave !== "PAGO" && e.chave !== "CANCELADO").reduce((s, e) => s + e.valorCentavos, 0);
   return { passagensPendentes: body.passagensPendentes, emRegua, pagos, abertoCentavos };
 }
 
@@ -55,6 +55,7 @@ export function TollDashboard() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const isAdmin = role === "admin" || role === "master";
+  const isMaster = role === "master";
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [lots, setLots] = useState<Lot[]>([]);
   const [totalLots, setTotalLots] = useState(0);
@@ -220,6 +221,7 @@ export function TollDashboard() {
               <option value="PAGO">Pago / Liquidado</option>
               <option value="EM_REGUA">Em régua ativa</option>
               <option value="INADIMPLENTE">Inadimplente</option>
+              <option value="CANCELADO">Cancelado</option>
             </select>
           </label>
 
@@ -335,13 +337,7 @@ export function TollDashboard() {
             <span>Cadastre, edite e defina o perfil de acesso de quem usa o módulo.</span>
           </Link>
         )}
-        {isAdmin && (
-          <Link className="quick-link" href="/configuracoes/regua">
-            <strong>Prazos da Régua</strong>
-            <span>Defina em quantos dias após a emissão acontecem as tentativas no cartão e o lembrete.</span>
-          </Link>
-        )}
-        {isAdmin && (
+        {isMaster && (
           <Link className="quick-link" href="/auditoria">
             <strong>Auditoria</strong>
             <span>Consulte quem compilou lotes, consultou a Adyen, exportou relatórios ou alterou usuários.</span>

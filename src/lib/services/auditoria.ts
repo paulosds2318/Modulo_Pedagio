@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 export const ACOES_AUDITORIA: Record<string, string> = {
   COMPILAR_LOTE: "Compilou lote manualmente",
   BAIXA_MANUAL: "Registrou baixa manual de lote",
+  CANCELAR_LOTE: "Cancelou lote",
   CONSULTAR_ADYEN: "Consultou status na Adyen",
   SINCRONIZAR_CORAL: "Sincronizou passagens com o Coral",
   EXPORTAR_RELATORIO: "Exportou relatório do painel",

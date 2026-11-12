@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
+import { useSession } from "@/lib/auth-client";
 import { rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
 
 type Etapa = { chave: string; quantidade: number; valorCentavos: number };
@@ -51,6 +52,7 @@ const ETAPAS: Record<string, { rotulo: string; descricao: string; cor: string }>
   D10: { rotulo: "D+10", descricao: "2ª tentativa no cartão", cor: "var(--foco-graphite)" },
   INADIMPLENTE: { rotulo: "Inadimplente", descricao: "Régua encerrada sem pagamento", cor: "var(--foco-red)" },
   PAGO: { rotulo: "Pago", descricao: "Liquidados", cor: "var(--foco-green)" },
+  CANCELADO: { rotulo: "Cancelado", descricao: "Gerados por engano, contestados ou isentos", cor: "var(--muted-light)" },
 };
 
 const INTEGRACOES: Record<string, string> = {
@@ -91,6 +93,9 @@ const muted: CSSProperties = { color: "var(--muted)", fontSize: 12 };
  * "alertas": só a lista de alertas (tela inicial).
  */
 export function OperationPanel({ refreshKey = 0, modo = "completo" }: { refreshKey?: number; modo?: "completo" | "alertas" }) {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const isAdmin = role === "admin" || role === "master";
   const [data, setData] = useState<Painel | null>(null);
   const [error, setError] = useState("");
 
@@ -210,6 +215,17 @@ export function OperationPanel({ refreshKey = 0, modo = "completo" }: { refreshK
             <h2>Funil da régua · agora</h2>
             <p>Todos os lotes, em qualquer data, pela etapa em que estão hoje · {totalLotes} lote{totalLotes === 1 ? "" : "s"} no total</p>
           </div>
+          <span style={{ ...muted, fontSize: 13, whiteSpace: "nowrap" }}>
+            Prazos atuais: {rotuloEtapa("D5", data.prazos)}, {rotuloEtapa("D7", data.prazos)} e {rotuloEtapa("D10", data.prazos)}
+            {isAdmin && (
+              <>
+                {" · "}
+                <Link href="/configuracoes/regua" style={{ color: "var(--foco-red)", fontWeight: 600 }}>
+                  alterar
+                </Link>
+              </>
+            )}
+          </span>
         </div>
         <div style={{ display: "grid", gap: 10 }}>
           {data.funil.map((e) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth-client";
 
 type Passage = {
@@ -15,19 +15,33 @@ type Passage = {
   valorCentavos: number;
   lojaRetirada: string;
 };
+type PageResult = { data: Passage[]; pagination: { page: number; limit: number; total: number; totalPages: number }; totalValorCentavos: number };
 
-const money = (c: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    c / 100
-  );
+const PAGE_SIZE = 50;
+const MAX_DIAS_SINCRONIZACAO = 31;
+const money = (c: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(c / 100);
+
+async function fetchPendentes(page: number, search: string, de: string, ate: string): Promise<PageResult> {
+  const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+  if (search.trim()) params.set("search", search.trim());
+  if (de) params.set("de", de);
+  if (ate) params.set("ate", ate);
+  const response = await fetch(`/api/passagens/pendentes?${params}`, { cache: "no-store" });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(body?.data)) throw new Error(body?.error || "Não foi possível carregar as passagens pendentes.");
+  return body;
+}
 
 export function CompilationPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
   const isViewer = !session?.user || (role !== "admin" && role !== "master");
 
-  const [all, setAll] = useState<Passage[]>([]);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [result, setResult] = useState<PageResult | null>(null);
+  const [page, setPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
+  // Seleção guarda as passagens inteiras, para funcionar entre páginas.
+  const [selected, setSelected] = useState<Record<number, Passage>>({});
   const [query, setQuery] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -35,91 +49,75 @@ export function CompilationPage() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState("");
   const [refreshError, setRefreshError] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [syncDe, setSyncDe] = useState("");
+  const [syncAte, setSyncAte] = useState("");
 
+  // Lista: espera a digitação parar (300 ms) antes de consultar o servidor.
   useEffect(() => {
-    fetch("/api/passagens/pendentes")
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Não foi possível carregar as passagens pendentes.");
-        setAll(await r.json());
-      })
-      .catch((e) => setNotice(e.message))
-      .finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      fetchPendentes(page, query, from, to)
+        .then((next) => {
+          if (!active) return;
+          setResult(next);
+          if (page > next.pagination.totalPages) setPage(next.pagination.totalPages);
+        })
+        .catch((e) => active && setNotice(e instanceof Error ? e.message : "Erro ao carregar as passagens."))
+        .finally(() => active && setLoading(false));
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [page, query, from, to, reloadKey]);
 
-  const passages = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("pt-BR");
-    return all.filter((p) => {
-      const date = p.dataHora.slice(0, 10);
-      return (
-        (!q ||
-          [p.placa, p.praca, p.rodovia, p.numeroContrato, p.lojaRetirada].some((v) =>
-            v.toLocaleLowerCase("pt-BR").includes(q)
-          )) &&
-        (!from || date >= from) &&
-        (!to || date <= to)
-      );
-    });
-  }, [all, query, from, to]);
-
-  const contracts = new Set(
-    all
-      .filter((p) => selected.includes(p.id))
-      .map((p) => `${p.numeroContrato}:${p.cpfCliente}`)
-  );
-
-  const total = all
-    .filter((p) => selected.includes(p.id))
-    .reduce((s, p) => s + p.valorCentavos, 0);
-
+  const passages = result?.data ?? [];
+  const selectedList = Object.values(selected);
+  const contracts = new Set(selectedList.map((p) => `${p.numeroContrato}:${p.cpfCliente}`));
+  const total = selectedList.reduce((s, p) => s + p.valorCentavos, 0);
   const feeCentavos = Math.round((Number(fee.replace(",", ".")) || 0) * 100);
   const finalTotal = total + feeCentavos;
+  const pageAllSelected = passages.length > 0 && passages.every((p) => selected[p.id]);
 
-  async function refreshPassages() {
-    setRefreshing(true);
-    setRefreshNotice("Atualizando passagens pendentes...");
-    setRefreshError("");
-    try {
-      const response = await fetch("/api/passagens/pendentes");
-      const result = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(result?.error || "N\u00e3o foi poss\u00edvel atualizar as passagens.");
-      }
-      if (!Array.isArray(result)) throw new Error("O servidor retornou uma resposta inv\u00e1lida para as passagens pendentes.");
-
-      const nextPassages: Passage[] = result;
-      const hasChanges = JSON.stringify(all) !== JSON.stringify(nextPassages);
-      const availableIds = new Set(nextPassages.map((passage) => passage.id));
-      setAll(nextPassages);
-      setSelected((current) => current.filter((id) => availableIds.has(id)));
-      setRefreshNotice(
-        hasChanges
-          ? "Passagens atualizadas com novos dados."
-          : "Sem atualiza\u00e7\u00f5es: nenhuma passagem mudou desde a \u00faltima consulta."
-      );
-    } catch (cause) {
-      setRefreshError(cause instanceof Error ? cause.message : "Erro ao atualizar as passagens.");
-    } finally {
-      setRefreshing(false);
-    }
+  function changeFilter(update: () => void) {
+    update();
+    setPage(1);
   }
-  async function syncFromCoral() {
-    setSyncing(true);
-    setRefreshNotice("Consultando passagens no Coral...");
+
+  function refreshPassages() {
     setRefreshError("");
+    setRefreshNotice("Passagens pendentes atualizadas.");
+    setReloadKey((k) => k + 1);
+  }
+
+  async function syncFromCoral() {
+    setRefreshError("");
+    if (Boolean(syncDe) !== Boolean(syncAte)) return setRefreshError("Para escolher o período, informe as duas datas (De e Até).");
+    if (syncDe && syncAte) {
+      const dias = (new Date(`${syncAte}T00:00:00Z`).getTime() - new Date(`${syncDe}T00:00:00Z`).getTime()) / 86_400_000;
+      if (dias < 0) return setRefreshError("A data inicial precisa ser anterior à final.");
+      if (dias > MAX_DIAS_SINCRONIZACAO) return setRefreshError(`O Coral aceita no máximo ${MAX_DIAS_SINCRONIZACAO} dias por consulta.`);
+    }
+    setSyncing(true);
+    setRefreshNotice(syncDe ? `Consultando passagens no Coral de ${syncDe.split("-").reverse().join("/")} a ${syncAte.split("-").reverse().join("/")}...` : "Consultando passagens no Coral (últimos dias)...");
     try {
-      const response = await fetch("/api/passagens/sincronizar", { method: "POST" });
+      const response = await fetch("/api/passagens/sincronizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(syncDe ? { startDate: syncDe, endDate: syncAte } : {}),
+      });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || "Falha ao sincronizar com o Coral.");
       setRefreshNotice(
-        `Coral: ${body.recebidas} recebidas, ${body.importadas} novas, ${body.duplicadas} já existentes, ` +
-        `${body.lotesCompilados} lote(s) compilado(s), ${body.rejeitadas} rejeitada(s) por dados inválidos.`
+        `Coral (${body.periodo.startDate.split("-").reverse().join("/")} a ${body.periodo.endDate.split("-").reverse().join("/")}): ` +
+          `${body.recebidas} recebidas, ${body.importadas} novas, ${body.duplicadas} já existentes, ` +
+          `${body.lotesCompilados} lote(s) compilado(s), ${body.rejeitadas} rejeitada(s) por dados inválidos.`
       );
-      const refreshed = await fetch("/api/passagens/pendentes");
-      if (refreshed.ok) setAll(await refreshed.json());
+      setReloadKey((k) => k + 1);
     } catch (cause) {
       setRefreshNotice("");
       setRefreshError(cause instanceof Error ? cause.message : "Falha ao sincronizar com o Coral.");
@@ -130,32 +128,20 @@ export function CompilationPage() {
 
   async function compile() {
     const feeValue = Number(fee.replace(",", "."));
-    if (
-      !selected.length ||
-      contracts.size !== 1 ||
-      !Number.isFinite(feeValue) ||
-      feeValue < 0
-    ) {
-      return;
-    }
+    if (!selectedList.length || contracts.size !== 1 || !Number.isFinite(feeValue) || feeValue < 0) return;
     setBusy(true);
     setNotice("");
     try {
       const r = await fetch("/api/lotes/compilar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          passagemIds: selected,
-          taxaCentavos: feeCentavos,
-        }),
+        body: JSON.stringify({ passagemIds: selectedList.map((p) => p.id), taxaCentavos: feeCentavos }),
       });
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || "Erro ao compilar lote.");
-      setNotice(
-        `Lote #${body.id} criado. Confira o histórico para ver os resultados das integrações.`
-      );
-      setSelected([]);
-      setAll((items) => items.filter((p) => !selected.includes(p.id)));
+      setNotice(`Lote #${body.id} criado. Confira o histórico para ver os resultados das integrações.`);
+      setSelected({});
+      setReloadKey((k) => k + 1);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Falha ao compilar lote.");
     } finally {
@@ -163,13 +149,16 @@ export function CompilationPage() {
     }
   }
 
-  const toggleSelectAll = () => {
-    if (selected.length === passages.length) {
-      setSelected([]);
-    } else {
-      setSelected(passages.map((p) => p.id));
-    }
+  const toggleSelectPage = () => {
+    setSelected((current) => {
+      const next = { ...current };
+      if (pageAllSelected) for (const p of passages) delete next[p.id];
+      else for (const p of passages) next[p.id] = p;
+      return next;
+    });
   };
+
+  const pagination = result?.pagination;
 
   return (
     <main className="shell">
@@ -185,27 +174,16 @@ export function CompilationPage() {
           <button
             type="button"
             className="button secondary refresh-icon-button"
-            onClick={() => void refreshPassages()}
-            disabled={loading || refreshing}
-            title={refreshing ? "Atualizando passagens pendentes" : "Atualizar passagens pendentes"}
-            aria-label={refreshing ? "Atualizando passagens pendentes" : "Atualizar passagens pendentes"}
+            onClick={refreshPassages}
+            disabled={loading}
+            title={loading ? "Atualizando passagens pendentes" : "Atualizar passagens pendentes"}
+            aria-label={loading ? "Atualizando passagens pendentes" : "Atualizar passagens pendentes"}
           >
-            <svg className={refreshing ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg className={loading ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          {!isViewer && (
-            <button
-              type="button"
-              className="button secondary"
-              onClick={() => void syncFromCoral()}
-              disabled={syncing || loading}
-              title="Buscar passagens no Coral"
-            >
-              {syncing ? "Sincronizando..." : "Sincronizar Coral"}
-            </button>
-          )}
           <Link className="button secondary" href="/lotes">
             Ver lotes emitidos &rarr;
           </Link>
@@ -213,80 +191,85 @@ export function CompilationPage() {
       </header>
 
       {notice && (
-        <div
-          className={`notice ${notice.includes("Falha") || notice.includes("Erro") ? "error-notice" : ""}`}
-          role="status"
-        >
+        <div className={`notice ${notice.includes("Falha") || notice.includes("Erro") ? "error-notice" : ""}`} role="status">
           {notice}
         </div>
       )}
-
       {refreshError && <div className="notice error-notice" role="alert">{refreshError}</div>}
       {refreshNotice && <div className="notice" role="status">{refreshNotice}</div>}
       {isViewer && (
-        <div
-          className="selection-summary"
-          style={{
-            background: "#F3F4F6",
-            borderColor: "var(--line)",
-            color: "var(--ink-secondary)",
-            marginBottom: "20px",
-          }}
-        >
+        <div className="selection-summary" style={{ background: "#F3F4F6", borderColor: "var(--line)", color: "var(--ink-secondary)", marginBottom: "20px" }}>
           <strong>Perfil de visualização:</strong> Compilação de lotes disponível apenas para administradores.
         </div>
+      )}
+
+      {!isViewer && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Sincronizar com o Coral</h2>
+              <p>
+                Sem datas, busca os últimos dias (o mesmo que a rotina automática faz). Para buscar passagens antigas, informe o período, de no máximo {MAX_DIAS_SINCRONIZACAO} dias.
+              </p>
+            </div>
+          </div>
+          <div className="filter-bar" style={{ alignItems: "flex-end" }}>
+            <label className="filter-field">
+              De (opcional)
+              <input type="date" value={syncDe} onChange={(e) => setSyncDe(e.target.value)} disabled={syncing} />
+            </label>
+            <label className="filter-field">
+              Até (opcional)
+              <input type="date" value={syncAte} onChange={(e) => setSyncAte(e.target.value)} disabled={syncing} />
+            </label>
+            <button type="button" className="button primary" onClick={() => void syncFromCoral()} disabled={syncing} title="Buscar passagens no Coral">
+              {syncing ? "Sincronizando..." : "Sincronizar Coral"}
+            </button>
+            {(syncDe || syncAte) && !syncing && (
+              <button type="button" className="button secondary" onClick={() => { setSyncDe(""); setSyncAte(""); }}>
+                Limpar datas
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
       <section className="panel">
         <div className="filter-bar">
           <label className="search-field">
             Buscar por contrato, placa, praça ou loja
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ex: LOC-1234, ABC1D23, Praça 12..."
-            />
+            <input value={query} onChange={(e) => changeFilter(() => setQuery(e.target.value))} placeholder="Ex: LOC-1234, ABC1D23, Praça 12..." />
           </label>
           <label className="filter-field">
             Data Inicial
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
+            <input type="date" value={from} onChange={(e) => changeFilter(() => setFrom(e.target.value))} />
           </label>
           <label className="filter-field">
             Data Final
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
+            <input type="date" value={to} onChange={(e) => changeFilter(() => setTo(e.target.value))} />
           </label>
           <label className="fee-field">
             Taxa Adm (R$)
-            <input
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              inputMode="decimal"
-            />
+            <input value={fee} onChange={(e) => setFee(e.target.value)} inputMode="decimal" />
           </label>
           <button
             className="button primary"
-            disabled={!selected.length || contracts.size !== 1 || busy || isViewer}
+            disabled={!selectedList.length || contracts.size !== 1 || busy || isViewer}
             title={isViewer ? "Ação restrita ao perfil Administrador" : undefined}
             onClick={() => void compile()}
           >
-            {busy ? "Compilando…" : isViewer ? "Apenas Administrador pode compilar" : `Compilar lote (${selected.length})`}
+            {busy ? "Compilando…" : isViewer ? "Apenas Administrador pode compilar" : `Compilar lote (${selectedList.length})`}
           </button>
         </div>
 
-        {selected.length > 0 && (
+        {selectedList.length > 0 && (
           <div className="selection-summary">
-            Selecionadas: <strong>{selected.length}</strong> passagem(ns) · 
-            Pedágios: <strong>{money(total)}</strong> · 
-            Taxa Administrativa: <strong>{money(feeCentavos)}</strong> · 
-            Total do Lote: <strong>{money(finalTotal)}</strong>
+            Selecionadas: <strong>{selectedList.length}</strong> passagem(ns) · Pedágios: <strong>{money(total)}</strong> · Taxa Administrativa:{" "}
+            <strong>{money(feeCentavos)}</strong> · Total do Lote: <strong>{money(finalTotal)}</strong>
+            {" · "}
+            <button type="button" className="link-button" onClick={() => setSelected({})} style={{ background: "none", border: 0, color: "var(--foco-red)", cursor: "pointer", fontWeight: 600, padding: 0 }}>
+              limpar seleção
+            </button>
             {contracts.size > 1 && (
               <span style={{ display: "block", marginTop: "4px" }}>
                 <strong>Atenção:</strong> Você selecionou passagens de mais de um contrato/cliente. Um lote só pode conter passagens de um único contrato.
@@ -300,12 +283,7 @@ export function CompilationPage() {
             <thead>
               <tr>
                 <th style={{ width: "40px" }}>
-                  <input
-                    type="checkbox"
-                    checked={passages.length > 0 && selected.length === passages.length}
-                    aria-label="Selecionar todas as passagens"
-                    onChange={toggleSelectAll}
-                  />
+                  <input type="checkbox" checked={pageAllSelected} aria-label="Selecionar as passagens desta página" onChange={toggleSelectPage} />
                 </th>
                 <th>Contrato</th>
                 <th>Veículo</th>
@@ -322,14 +300,15 @@ export function CompilationPage() {
                     <td>
                       <input
                         type="checkbox"
-                        checked={selected.includes(p.id)}
+                        checked={Boolean(selected[p.id])}
                         aria-label={`Selecionar passagem ${p.id}`}
                         onChange={() =>
-                          setSelected((s) =>
-                            s.includes(p.id)
-                              ? s.filter((id) => id !== p.id)
-                              : [...s, p.id]
-                          )
+                          setSelected((s) => {
+                            const next = { ...s };
+                            if (next[p.id]) delete next[p.id];
+                            else next[p.id] = p;
+                            return next;
+                          })
                         }
                       />
                     </td>
@@ -351,15 +330,37 @@ export function CompilationPage() {
               ) : (
                 <tr>
                   <td colSpan={7} className="empty">
-                    {loading
-                      ? "Carregando passagens pendentes..."
-                      : "Nenhuma passagem pendente encontrada com os filtros selecionados."}
+                    {loading ? "Carregando passagens pendentes..." : "Nenhuma passagem pendente encontrada com os filtros selecionados."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {pagination && (
+          <div className="audit-pagination">
+            <span>
+              Página <strong>{pagination.page}</strong> de <strong>{pagination.totalPages}</strong> · {pagination.total} passage{pagination.total === 1 ? "m" : "ns"} pendente
+              {pagination.total === 1 ? "" : "s"} · {money(result?.totalValorCentavos ?? 0)}
+            </span>
+            {pagination.totalPages > 1 && (
+              <div>
+                <button type="button" className="button secondary" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  ← Anterior
+                </button>
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={page >= pagination.totalPages || loading}
+                  onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                >
+                  Próxima →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </main>
   );

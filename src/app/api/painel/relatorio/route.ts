@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
     descontoRow.getCell("atual").numFmt = MOEDA;
     descontoRow.getCell("anterior").numFmt = MOEDA;
     linha("Lotes inadimplentes", totals.inadimplentes, before?.inadimplentes, totals.inadimplentes, before?.inadimplentes);
+    linha("Lotes cancelados", totals.cancelados, before?.cancelados, totals.cancelados, before?.cancelados);
     linha("Tempo até o pagamento (mediana)", formatDuration(totals.tempoPagamentoSeg), before ? formatDuration(before.tempoPagamentoSeg) : null);
     styleHeader(resumo);
     resumo.addRow([]);

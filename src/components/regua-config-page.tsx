@@ -70,8 +70,8 @@ export function ReguaConfigPage() {
           <h1>Prazos da Régua</h1>
           <p>Quantos dias depois da emissão do lote cada etapa da cobrança acontece. O link de pagamento é sempre enviado no dia da emissão (D+0).</p>
         </div>
-        <Link className="button secondary" href="/">
-          ← Voltar
+        <Link className="button secondary" href="/painel">
+          ← Voltar ao painel
         </Link>
       </header>
 

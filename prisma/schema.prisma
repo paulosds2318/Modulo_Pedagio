@@ -43,37 +43,42 @@ model PassagemPedagio {
 }
 
 model LoteCobranca {
-  id                    Int                 @id @default(autoincrement())
-  numeroContrato        String
-  cpfCliente            String
-  nomeCliente           String?
-  telefoneContato       String?
-  telefoneCliente       String?
-  quantidadePassagens   Int
-  valorTotalCentavos    Int
-  taxaCentavos          Int                 @default(0)
-  valorFinalCentavos    Int
-  status                String              @default("PENDENTE")
-  adyenLinkId           String?
-  adyenPaymentUrl       String?
-  adyenPspReference     String?
-  etapaRegua            String              @default("D0")
-  dataCriacao           DateTime            @default(now())
-  dataPagamento         DateTime?
+  id                     Int                 @id @default(autoincrement())
+  numeroContrato         String
+  cpfCliente             String
+  nomeCliente            String?
+  telefoneContato        String?
+  telefoneCliente        String?
+  quantidadePassagens    Int
+  valorTotalCentavos     Int
+  taxaCentavos           Int                 @default(0)
+  valorFinalCentavos     Int
+  status                 String              @default("PENDENTE")
+  adyenLinkId            String?
+  adyenPaymentUrl        String?
+  adyenPspReference      String?
+  etapaRegua             String              @default("D0")
+  dataCriacao            DateTime            @default(now())
+  dataPagamento          DateTime?
   /// Como o lote foi pago: ADYEN_LINK, CARTAO, PIX, DEPOSITO, DINHEIRO, NEGOCIACAO ou OUTRO.
-  formaPagamento        String?
+  formaPagamento         String?
   /// Valor efetivamente recebido (pode diferir do valor final em acordo/negociação).
-  valorRecebidoCentavos Int?
-  baixaManual           Boolean             @default(false)
-  baixaObservacao       String?
-  baixaPor              String?
-  d5TentativaAt         DateTime?
-  d7LembreteAt          DateTime?
-  d10TentativaAt        DateTime?
-  processandoAte        DateTime?
-  passagens             PassagemPedagio[]
-  logs                  LogRegua[]
-  integrationJobs       IntegrationOutbox[]
+  valorRecebidoCentavos  Int?
+  baixaManual            Boolean             @default(false)
+  baixaObservacao        String?
+  baixaPor               String?
+  /// Cancelamento (lote gerado por engano, contestação, isenção…): motivo, observação, quem e quando.
+  canceladoEm            DateTime?
+  cancelamentoMotivo     String?
+  cancelamentoObservacao String?
+  canceladoPor           String?
+  d5TentativaAt          DateTime?
+  d7LembreteAt           DateTime?
+  d10TentativaAt         DateTime?
+  processandoAte         DateTime?
+  passagens              PassagemPedagio[]
+  logs                   LogRegua[]
+  integrationJobs        IntegrationOutbox[]
 
   @@index([numeroContrato])
   @@index([status])

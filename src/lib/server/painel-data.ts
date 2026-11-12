@@ -65,6 +65,9 @@ export type Totais = {
   descontoCentavos: number;
   inadimplentes: number;
   emRegua: number;
+  /** Lotes cancelados (não entram no cobrado nem no em aberto). */
+  cancelados: number;
+  canceladoCentavos: number;
   /** Mediana do tempo entre a emissão e o pagamento, em segundos. */
   tempoPagamentoSeg: number | null;
 };
@@ -74,7 +77,9 @@ export function totalizar(lotes: LotePainel[]): Totais {
   const tempos = pagos
     .filter((l) => l.dataPagamento)
     .map((l) => Math.max(0, (l.dataPagamento!.getTime() - l.dataCriacao.getTime()) / 1000));
-  const cobrado = lotes.reduce((s, l) => s + l.valorFinalCentavos, 0);
+  const validos = lotes.filter((l) => l.status !== "CANCELADO");
+  const cancelados = lotes.filter((l) => l.status === "CANCELADO");
+  const cobrado = validos.reduce((s, l) => s + l.valorFinalCentavos, 0);
   const recebidoDe = (l: LotePainel) => l.valorRecebidoCentavos ?? l.valorFinalCentavos;
   const recebido = pagos.reduce((s, l) => s + recebidoDe(l), 0);
   const desconto = pagos.reduce((s, l) => s + Math.max(0, l.valorFinalCentavos - recebidoDe(l)), 0);
@@ -83,12 +88,14 @@ export function totalizar(lotes: LotePainel[]): Totais {
     passagens: lotes.reduce((s, l) => s + l.quantidadePassagens, 0),
     cobradoCentavos: cobrado,
     recebidoCentavos: recebido,
-    abertoCentavos: lotes.filter((l) => l.status !== "PAGO").reduce((s, l) => s + l.valorFinalCentavos, 0),
+    abertoCentavos: lotes.filter((l) => l.status === "EM_REGUA" || l.status === "INADIMPLENTE").reduce((s, l) => s + l.valorFinalCentavos, 0),
     pagos: pagos.length,
     baixasManuais: pagos.filter((l) => l.baixaManual).length,
     descontoCentavos: desconto,
     inadimplentes: lotes.filter((l) => l.status === "INADIMPLENTE").length,
     emRegua: lotes.filter((l) => l.status === "EM_REGUA").length,
+    cancelados: cancelados.length,
+    canceladoCentavos: cancelados.reduce((s, l) => s + l.valorFinalCentavos, 0),
     tempoPagamentoSeg: median(tempos),
   };
 }

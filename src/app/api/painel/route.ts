@@ -57,6 +57,7 @@ export async function GET() {
       ...ETAPAS_REGUA.map((etapa) => ({ chave: etapa, ...soma((g) => g.status === "EM_REGUA" && g.etapaRegua === etapa) })),
       { chave: "INADIMPLENTE", ...soma((g) => g.status === "INADIMPLENTE") },
       { chave: "PAGO", ...soma((g) => g.status === "PAGO") },
+      { chave: "CANCELADO", ...soma((g) => g.status === "CANCELADO") },
     ];
 
     // Saúde das integrações: tarefas da outbox por tipo e situação.
