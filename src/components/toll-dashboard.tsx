@@ -179,7 +179,7 @@ export function TollDashboard() {
         </article>
       </section>
 
-      <OperationPanel refreshKey={panelKey} />
+      <OperationPanel refreshKey={panelKey} modo="alertas" />
 
       <section className="panel">
         <div className="panel-head" style={{ flexWrap: "wrap", gap: "16px" }}>

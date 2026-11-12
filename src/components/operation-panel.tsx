@@ -67,8 +67,11 @@ const grid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto
 const card: CSSProperties = { border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 14, background: "var(--bg)" };
 const muted: CSSProperties = { color: "var(--muted)", fontSize: 12 };
 
-/** Painel de acompanhamento: funil da régua e saúde das integrações. */
-export function OperationPanel({ refreshKey = 0 }: { refreshKey?: number }) {
+/**
+ * Situação atual da operação. "completo": funil da régua, saúde das integrações e alertas (página /painel);
+ * "alertas": só a lista de alertas (tela inicial).
+ */
+export function OperationPanel({ refreshKey = 0, modo = "completo" }: { refreshKey?: number; modo?: "completo" | "alertas" }) {
   const [data, setData] = useState<Painel | null>(null);
   const [error, setError] = useState("");
 
@@ -90,14 +93,57 @@ export function OperationPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const maxQtd = Math.max(1, ...data.funil.map((e) => e.quantidade));
   const totalLotes = data.funil.reduce((s, e) => s + e.quantidade, 0);
   const alertasTotal = data.lotesSemLink.length + data.alertas.length;
+  const listaAlertas = (
+    <>
+        {alertasTotal === 0 ? (
+        <p style={{ ...pill("var(--foco-green)"), fontSize: 13 }}><span style={dot("var(--foco-green)")} />Nenhum alerta nos últimos 30 dias.</p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+          {data.lotesSemLink.map((l) => (
+            <li key={`sem-link-${l.id}`} style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <span style={pill("var(--foco-amber)")}><span style={dot("var(--foco-amber)")} />Lote sem link de pagamento</span>
+              <span style={{ fontSize: 13 }}>
+                <Link href={`/lotes/${l.id}`} className="strong">Lote #{l.id}</Link> · {l.numeroContrato} · criado em {dateTime(l.dataCriacao)}
+              </span>
+            </li>
+          ))}
+          {data.alertas.map((a) => (
+            <li key={`alerta-${a.id}`} style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <span style={pill("var(--foco-red)")}><span style={dot("var(--foco-red)")} />{ACOES[a.acao] ?? `${a.acao} (${a.resultado})`}</span>
+              <span style={{ fontSize: 13 }}>
+                <Link href={`/lotes/${a.loteId}`} className="strong">Lote #{a.loteId}</Link> · etapa {a.etapa} · {dateTime(a.dataHora)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+
+  if (modo === "alertas") {
+    return (
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Alertas {alertasTotal > 0 ? `(${alertasTotal})` : ""}</h2>
+            <p>O que precisa de ação manual agora · atualizado em {dateTime(data.geradoEm)}</p>
+          </div>
+          <Link href="/painel" className="button secondary">
+            Painel de acompanhamento →
+          </Link>
+        </div>
+        {listaAlertas}
+      </section>
+    );
+  }
 
   return (
     <>
       <section className="panel">
         <div className="panel-head">
           <div>
-            <h2>Funil da Régua de Cobrança</h2>
-            <p>Lotes e valores em cada etapa · {totalLotes} lote{totalLotes === 1 ? "" : "s"} no total</p>
+            <h2>Funil da régua · agora</h2>
+            <p>Todos os lotes, em qualquer data, pela etapa em que estão hoje · {totalLotes} lote{totalLotes === 1 ? "" : "s"} no total</p>
           </div>
         </div>
         <div style={{ display: "grid", gap: 10 }}>
@@ -128,7 +174,7 @@ export function OperationPanel({ refreshKey = 0 }: { refreshKey?: number }) {
       <section className="panel">
         <div className="panel-head">
           <div>
-            <h2>Saúde das Integrações</h2>
+            <h2>Saúde das integrações · agora</h2>
             <p>Situação das tarefas automáticas · atualizado em {dateTime(data.geradoEm)}</p>
           </div>
         </div>
@@ -168,28 +214,7 @@ export function OperationPanel({ refreshKey = 0 }: { refreshKey?: number }) {
         <h3 style={{ margin: "20px 0 10px", fontSize: 15 }}>
           Alertas {alertasTotal > 0 ? `(${alertasTotal})` : ""}
         </h3>
-        {alertasTotal === 0 ? (
-          <p style={{ ...pill("var(--foco-green)"), fontSize: 13 }}><span style={dot("var(--foco-green)")} />Nenhum alerta nos últimos 30 dias.</p>
-        ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
-            {data.lotesSemLink.map((l) => (
-              <li key={`sem-link-${l.id}`} style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <span style={pill("var(--foco-amber)")}><span style={dot("var(--foco-amber)")} />Lote sem link de pagamento</span>
-                <span style={{ fontSize: 13 }}>
-                  <Link href={`/lotes/${l.id}`} className="strong">Lote #{l.id}</Link> · {l.numeroContrato} · criado em {dateTime(l.dataCriacao)}
-                </span>
-              </li>
-            ))}
-            {data.alertas.map((a) => (
-              <li key={`alerta-${a.id}`} style={{ ...card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <span style={pill("var(--foco-red)")}><span style={dot("var(--foco-red)")} />{ACOES[a.acao] ?? `${a.acao} (${a.resultado})`}</span>
-                <span style={{ fontSize: 13 }}>
-                  <Link href={`/lotes/${a.loteId}`} className="strong">Lote #{a.loteId}</Link> · etapa {a.etapa} · {dateTime(a.dataHora)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        {listaAlertas}
       </section>
     </>
   );
