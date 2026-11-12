@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { OperationPanel } from "@/components/operation-panel";
+import { useSession } from "@/lib/auth-client";
 
 type Lot = {
   id: number;
@@ -47,6 +48,9 @@ async function fetchDashboardData() {
 }
 
 export function TollDashboard() {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const isAdmin = role === "admin" || role === "master";
   const [passages, setPassages] = useState(0);
   const [lots, setLots] = useState<Lot[]>([]);
   const [error, setError] = useState("");
@@ -331,6 +335,12 @@ export function TollDashboard() {
           <strong>Acompanhar Régua de Cobrança</strong>
           <span>Consulte o histórico de envios, links Adyen ativos e baixas manuais auditadas.</span>
         </Link>
+        {isAdmin && (
+          <Link className="quick-link" href="/usuarios">
+            <strong>Gestão de Usuários</strong>
+            <span>Cadastre, edite e defina o perfil de acesso de quem usa o módulo.</span>
+          </Link>
+        )}
       </section>
     </main>
   );

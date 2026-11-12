@@ -117,15 +117,6 @@ export function AppNav() {
         >
           Painel
         </Link>
-        {isAdmin && (
-          <Link
-            href="/usuarios"
-            className={`nav-link ${pathname.startsWith("/usuarios") ? "active" : ""}`}
-            style={{ fontWeight: 700 }}
-          >
-            👥 Gestão de usuários
-          </Link>
-        )}
       </div>
 
       <div className="nav-right" style={{ gap: "10px" }}>

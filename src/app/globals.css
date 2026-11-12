@@ -791,7 +791,7 @@ td input[type="checkbox"] {
    ========================================================================== */
 .quick-links {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 18px;
   margin-top: 10px;
 }
