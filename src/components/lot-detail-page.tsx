@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSession } from "@/lib/auth-client";
+import { FORMAS_BAIXA_MANUAL, FORMAS_PAGAMENTO, STATUS_PERMITEM_BAIXA, reaisParaCentavos } from "@/lib/baixa-manual";
 import { formatCpf, formatPhone } from "@/lib/pii";
 import { PRAZOS_PADRAO, rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
 type Entry = {
@@ -30,6 +32,11 @@ type Lot = {
   adyenPaymentUrl: string | null;
   dataCriacao: string;
   dataPagamento: string | null;
+  formaPagamento: string | null;
+  valorRecebidoCentavos: number | null;
+  baixaManual: boolean;
+  baixaObservacao: string | null;
+  baixaPor: string | null;
   passagens: {
     id: number;
     placa: string;
@@ -53,6 +60,13 @@ const buildStages = (prazos: PrazosRegua) => [
 ];
 export function LotDetailPage() {
   const params = useParams<{ id: string }>();
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const isAdmin = role === "admin" || role === "master";
+  const [baixaAberta, setBaixaAberta] = useState(false);
+  const [salvandoBaixa, setSalvandoBaixa] = useState(false);
+  const [baixaErro, setBaixaErro] = useState("");
+  const [baixa, setBaixa] = useState({ forma: "PIX", dataPagamento: "", valor: "", observacao: "" });
   const [lot, setLot] = useState<Lot | null>(null);
   const [prazos, setPrazos] = useState<PrazosRegua>(PRAZOS_PADRAO);
   const stages = buildStages(prazos);
@@ -85,7 +99,15 @@ export function LotDetailPage() {
           throw new Error(`Servidor retornou status ${response.status} (${response.statusText})`);
         }
         if (!response.ok) throw new Error(data?.error || "Erro ao carregar detalhes do lote.");
-        if (!cancelled) setLot(data);
+        if (!cancelled) {
+          setLot(data);
+          // Veio pelo link "Dar baixa →" (#baixa): abre o formulário já preenchido.
+          if (window.location.hash === "#baixa" && ["EM_REGUA", "INADIMPLENTE"].includes(data.status)) {
+            const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+            setBaixa({ forma: "PIX", dataPagamento: hoje, valor: (data.valorFinalCentavos / 100).toFixed(2).replace(".", ","), observacao: "" });
+            setBaixaAberta(true);
+          }
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar detalhes do lote.");
       } finally {
@@ -98,6 +120,42 @@ export function LotDetailPage() {
       cancelled = true;
     };
   }, [params.id]);
+  function abrirBaixa() {
+    if (!lot) return;
+    const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+    setBaixa({ forma: "PIX", dataPagamento: hoje, valor: (lot.valorFinalCentavos / 100).toFixed(2).replace(".", ","), observacao: "" });
+    setBaixaErro("");
+    setBaixaAberta(true);
+    window.setTimeout(() => document.getElementById("baixa")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  async function registrarBaixa(event: FormEvent) {
+    event.preventDefault();
+    if (!lot) return;
+    setBaixaErro("");
+    const centavos = reaisParaCentavos(baixa.valor);
+    if (centavos === null || centavos <= 0) return setBaixaErro("Informe o valor recebido, por exemplo 13,21.");
+    const diferenca = centavos - lot.valorFinalCentavos;
+    if (diferenca !== 0 && !window.confirm(`O valor recebido é ${diferenca < 0 ? "menor" : "maior"} que o devido em ${money(Math.abs(diferenca))}. Confirmar a baixa assim mesmo?`)) return;
+    setSalvandoBaixa(true);
+    try {
+      const response = await fetch(`/api/lotes/${params.id}/baixa-manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forma: baixa.forma, dataPagamento: baixa.dataPagamento, valorRecebidoCentavos: centavos, observacao: baixa.observacao }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Não foi possível registrar a baixa.");
+      await reload();
+      setBaixaAberta(false);
+      setQueryMessage("Baixa manual registrada. O lote está pago e a régua de cobrança foi encerrada.");
+    } catch (cause) {
+      setBaixaErro(cause instanceof Error ? cause.message : "Erro ao registrar a baixa.");
+    } finally {
+      setSalvandoBaixa(false);
+    }
+  }
+
   async function refreshLot() {
     if (!lot) return;
     setQueryingAdyen(true);
@@ -174,6 +232,8 @@ export function LotDetailPage() {
   }
   const logStages = new Set(lot.logs.map((x) => x.etapa));
   const canQueryAdyen = Boolean(lot.adyenLinkId && lot.status !== "PAGO");
+  const podeDarBaixa = isAdmin && STATUS_PERMITEM_BAIXA.includes(lot.status);
+  const inadimplente = lot.status === "INADIMPLENTE";
   return (
     <main className="shell">
       <div className="backline">
@@ -194,6 +254,20 @@ export function LotDetailPage() {
             Gerado em {new Date(lot.dataCriacao).toLocaleString("pt-BR")} · {lot.quantidadePassagens} passagem(ns) vinculada(s)
             {lot.dataPagamento && ` · Pago em ${new Date(lot.dataPagamento).toLocaleString("pt-BR")}`}
           </p>
+          {lot.status === "PAGO" && lot.formaPagamento && (
+            <p>
+              Pagamento: <span className="strong">{FORMAS_PAGAMENTO[lot.formaPagamento] ?? lot.formaPagamento}</span>
+              {lot.baixaManual && " · baixa manual"}
+              {lot.valorRecebidoCentavos != null && (
+                <>
+                  {" · "}Recebido: <span className="strong">{money(lot.valorRecebidoCentavos)}</span>
+                  {lot.valorRecebidoCentavos !== lot.valorFinalCentavos &&
+                    ` (${lot.valorRecebidoCentavos < lot.valorFinalCentavos ? "desconto" : "acréscimo"} de ${money(Math.abs(lot.valorFinalCentavos - lot.valorRecebidoCentavos))})`}
+                </>
+              )}
+              {lot.baixaPor && ` · por ${lot.baixaPor}`}
+            </p>
+          )}
         </div>
         <div className="page-heading-actions">
             <button
@@ -209,14 +283,81 @@ export function LotDetailPage() {
                 <path d="M5.6 9a7 7 0 0 1 11.55-2L20 12M4 12l2.85 5a7 7 0 0 0 11.55-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+          {podeDarBaixa && (
+            <button type="button" className={`button ${inadimplente ? "primary" : "secondary"}`} onClick={abrirBaixa}>
+              Registrar baixa manual
+            </button>
+          )}
           <span className={`status status-${lot.status.toLowerCase()}`}>
             {lot.status.replaceAll("_", " ")}
+            {lot.baixaManual ? " (MANUAL)" : ""}
           </span>
         </div>
       </header>
 
       {error && <div className="notice error-notice" role="alert">{error}</div>}
       {queryMessage && <div className="notice" role="status">{queryMessage}</div>}
+      {inadimplente && !baixaAberta && (
+        <div className="notice error-notice" role="status">
+          Régua encerrada sem pagamento. Se o cliente pagou por outro meio (PIX, depósito, acordo), registre a baixa manual
+          {isAdmin ? "." : " (somente administradores)."}
+        </div>
+      )}
+      {baixaAberta && podeDarBaixa && (
+        <section className="panel" id="baixa">
+          <div className="panel-head">
+            <div>
+              <h2>Registrar baixa manual</h2>
+              <p>
+                Use quando o cliente pagou fora do link ou do cartão. O lote vira Pago, a régua para e as tarefas pendentes são canceladas.
+                Fica registrado no histórico e na auditoria.
+              </p>
+            </div>
+          </div>
+          {baixaErro && <div className="notice error-notice" role="alert">{baixaErro}</div>}
+          <form onSubmit={registrarBaixa} className="filter-bar" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+            <label className="filter-field">
+              Forma de pagamento
+              <select value={baixa.forma} onChange={(e) => setBaixa((b) => ({ ...b, forma: e.target.value }))} disabled={salvandoBaixa}>
+                {Object.entries(FORMAS_BAIXA_MANUAL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              Data do pagamento
+              <input type="date" required value={baixa.dataPagamento} onChange={(e) => setBaixa((b) => ({ ...b, dataPagamento: e.target.value }))} disabled={salvandoBaixa} />
+            </label>
+            <label className="filter-field">
+              Valor recebido (R$)
+              <input inputMode="decimal" required value={baixa.valor} onChange={(e) => setBaixa((b) => ({ ...b, valor: e.target.value }))} disabled={salvandoBaixa} style={{ width: 120 }} />
+            </label>
+            <label className="filter-field" style={{ flex: "1 1 320px" }}>
+              Observação (comprovante, acordo…)
+              <input
+                required
+                minLength={5}
+                maxLength={500}
+                placeholder="Ex.: PIX recebido, comprovante E1234…; acordo com desconto aprovado por…"
+                value={baixa.observacao}
+                onChange={(e) => setBaixa((b) => ({ ...b, observacao: e.target.value }))}
+                disabled={salvandoBaixa}
+              />
+            </label>
+            <button className="button primary" type="submit" disabled={salvandoBaixa}>
+              {salvandoBaixa ? "Registrando…" : "Confirmar baixa"}
+            </button>
+            <button className="button secondary" type="button" onClick={() => setBaixaAberta(false)} disabled={salvandoBaixa}>
+              Cancelar
+            </button>
+          </form>
+          <p style={{ color: "var(--muted)", fontSize: 13, margin: "10px 0 0" }}>
+            Valor devido: <span className="strong">{money(lot.valorFinalCentavos)}</span>. Se o valor recebido for diferente (acordo), explique na observação.
+          </p>
+        </section>
+      )}
       <section className="summary">
         <article>
           <span>Soma dos Pedágios</span>

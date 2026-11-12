@@ -51,7 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
       await db.$transaction(async (tx) => {
         await tx.loteCobranca.updateMany({
           where: { id, status: { not: "PAGO" } },
-          data: { status: "PAGO", dataPagamento: new Date() },
+          data: { status: "PAGO", dataPagamento: new Date(), formaPagamento: "ADYEN_LINK", valorRecebidoCentavos: lot.valorFinalCentavos },
         });
         await tx.logRegua.create({
           data: { loteId: id, etapa: lot.etapaRegua, acao: "CONFIRMAR_PAGAMENTO_ADYEN", canal: "Adyen", resultado: "PAGO", detalhesResposta: "Pagamento confirmado após consulta solicitada pelo administrador à Adyen." },

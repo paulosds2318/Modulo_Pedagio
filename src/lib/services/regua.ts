@@ -155,6 +155,8 @@ async function tryCardCharge(
           status: "PAGO",
           dataPagamento: new Date(),
           adyenPspReference: result.pspReference,
+          formaPagamento: "CARTAO",
+          valorRecebidoCentavos: fresh.valorFinalCentavos,
         },
       });
 

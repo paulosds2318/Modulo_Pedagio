@@ -6,6 +6,7 @@ import { safeText, styleHeader } from "@/lib/server/spreadsheet";
 import { registrarAuditoria } from "@/lib/services/auditoria";
 import { obterPrazosRegua } from "@/lib/services/config-regua";
 import { rotuloEtapa } from "@/lib/regua-config";
+import { FORMAS_PAGAMENTO } from "@/lib/baixa-manual";
 import {
   SITUACOES,
   UNIT_LABELS,
@@ -68,6 +69,10 @@ export async function GET(request: NextRequest) {
     }
     linha("% recuperado", percent(totals.recebidoCentavos, totals.cobradoCentavos), before ? percent(before.recebidoCentavos, before.cobradoCentavos) : null);
     linha("Lotes pagos", totals.pagos, before?.pagos, totals.pagos, before?.pagos);
+    linha("Pagos por baixa manual", totals.baixasManuais, before?.baixasManuais, totals.baixasManuais, before?.baixasManuais);
+    const descontoRow = linha("Descontos concedidos (acordos)", reais(totals.descontoCentavos), before ? reais(before.descontoCentavos) : null);
+    descontoRow.getCell("atual").numFmt = MOEDA;
+    descontoRow.getCell("anterior").numFmt = MOEDA;
     linha("Lotes inadimplentes", totals.inadimplentes, before?.inadimplentes, totals.inadimplentes, before?.inadimplentes);
     linha("Tempo até o pagamento (mediana)", formatDuration(totals.tempoPagamentoSeg), before ? formatDuration(before.tempoPagamentoSeg) : null);
     styleHeader(resumo);
@@ -124,6 +129,9 @@ export async function GET(request: NextRequest) {
       { header: "Etapa", key: "etapa", width: 8 },
       { header: "Emitido em", key: "emitido", width: 18 },
       { header: "Pago em", key: "pago", width: 18 },
+      { header: "Forma de pagamento", key: "forma", width: 30 },
+      { header: "Valor recebido", key: "recebido", width: 14, style: { numFmt: MOEDA } },
+      { header: "Baixa manual", key: "manual", width: 12 },
     ];
     for (const l of lotes) {
       lista.addRow({
@@ -137,6 +145,9 @@ export async function GET(request: NextRequest) {
         etapa: rotuloEtapa(l.etapaRegua, prazos),
         emitido: formatDateTime(l.dataCriacao),
         pago: l.dataPagamento ? formatDateTime(l.dataPagamento) : "",
+        forma: l.formaPagamento ? (FORMAS_PAGAMENTO[l.formaPagamento] ?? safeText(l.formaPagamento)) : "",
+        recebido: l.status === "PAGO" ? reais(l.valorRecebidoCentavos ?? l.valorFinalCentavos) : "",
+        manual: l.baixaManual ? "Sim" : "",
       });
     }
     styleHeader(lista);

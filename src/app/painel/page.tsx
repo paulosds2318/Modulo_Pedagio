@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth";
-import { linhaDoTempo, listarLojas, loadLotes, porLoja, totalizar, type Totais } from "@/lib/server/painel-data";
+import { linhaDoTempo, listarInadimplentes, listarLojas, loadLotes, porLoja, totalizar, type Totais } from "@/lib/server/painel-data";
+import { FORMAS_PAGAMENTO } from "@/lib/baixa-manual";
 import {
   ETAPAS,
   PERIODS,
@@ -37,7 +38,13 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
   const page = pageParam(params, "p");
   const previous = previousFilters(filters);
 
-  const [lotes, lotesAnteriores, lojas, prazos] = await Promise.all([loadLotes(filters), previous ? loadLotes(previous) : null, listarLojas(), obterPrazosRegua()]);
+  const [lotes, lotesAnteriores, lojas, prazos, inadimplentes] = await Promise.all([
+    loadLotes(filters),
+    previous ? loadLotes(previous) : null,
+    listarLojas(),
+    obterPrazosRegua(),
+    listarInadimplentes(),
+  ]);
   const totals = totalizar(lotes);
   const before: Totais | null = lotesAnteriores ? totalizar(lotesAnteriores) : null;
   const lojasResumo = porLoja(lotes);
@@ -72,7 +79,10 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
     {
       label: "Valor recebido",
       value: money(totals.recebidoCentavos),
-      detail: `${totals.pagos} lote${totals.pagos === 1 ? "" : "s"} pago${totals.pagos === 1 ? "" : "s"} · ${percent(totals.recebidoCentavos, totals.cobradoCentavos)} recuperado`,
+      detail:
+        `${totals.pagos} lote${totals.pagos === 1 ? "" : "s"} pago${totals.pagos === 1 ? "" : "s"} · ${percent(totals.recebidoCentavos, totals.cobradoCentavos)} recuperado` +
+        (totals.baixasManuais ? ` · ${totals.baixasManuais} por baixa manual` : "") +
+        (totals.descontoCentavos ? ` · ${money(totals.descontoCentavos)} em descontos` : ""),
       change: change(recuperacao(totals), before ? recuperacao(before) : undefined, (v) => `${v}%`),
     },
     {
@@ -243,6 +253,56 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
         </div>
       </section>
 
+      <section className="panel dashboard-recent" id="inadimplentes">
+        <div className="panel-head">
+          <div>
+            <h2>Inadimplentes aguardando baixa · {inadimplentes.total}</h2>
+            <p>Régua encerrada sem pagamento, de qualquer data. Depois de negociar com o cliente, registre a baixa manual no lote.</p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>Lote</th>
+                <th>Cliente</th>
+                <th>Valor devido</th>
+                <th>Emitido em</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {inadimplentes.itens.map((lote) => (
+                <tr key={lote.id}>
+                  <td className="strong">
+                    #{lote.id}
+                    <span className="subcell">{lote.numeroContrato}</span>
+                  </td>
+                  <td>{lote.nomeCliente || "—"}</td>
+                  <td>{money(lote.valorFinalCentavos)}</td>
+                  <td>{formatDateTime(lote.dataCriacao)}</td>
+                  <td>
+                    <Link href={`/lotes/${lote.id}#baixa`}>Dar baixa →</Link>
+                  </td>
+                </tr>
+              ))}
+              {!inadimplentes.itens.length && (
+                <tr>
+                  <td className="empty" colSpan={5}>
+                    Nenhum lote inadimplente.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {inadimplentes.total > inadimplentes.itens.length && (
+          <p style={{ color: "var(--muted)", fontSize: 13, margin: "10px 0 0" }}>
+            Mostrando os {inadimplentes.itens.length} mais antigos de {inadimplentes.total}. Use o filtro de situação Inadimplente para ver por período.
+          </p>
+        )}
+      </section>
+
       <section className="panel dashboard-recent" id="lotes">
         <div className="panel-head">
           <div>
@@ -276,6 +336,12 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
                   <td>
                     <span className="dashboard-status">{SITUACOES[lote.status] ?? lote.status}</span>
                     {lote.status === "EM_REGUA" && <span className="subcell">Etapa {rotuloEtapa(lote.etapaRegua, prazos)}</span>}
+                    {lote.status === "PAGO" && lote.formaPagamento && (
+                      <span className="subcell">
+                        {FORMAS_PAGAMENTO[lote.formaPagamento] ?? lote.formaPagamento}
+                        {lote.baixaManual ? " (manual)" : ""}
+                      </span>
+                    )}
                   </td>
                   <td>{formatDateTime(lote.dataCriacao)}</td>
                   <td>

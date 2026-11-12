@@ -98,6 +98,9 @@ export async function POST(request: Request) {
             status: "PAGO",
             dataPagamento: new Date(),
             adyenPspReference: pspReference,
+            // LOTE_<id> = link de pagamento; LOTE_<id>_D5/_D10 = débito no cartão salvo.
+            formaPagamento: /^LOTE_\d+_/.test(reference) ? "CARTAO" : "ADYEN_LINK",
+            valorRecebidoCentavos: receivedCents,
           },
         });
 
