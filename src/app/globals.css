@@ -1520,3 +1520,14 @@ div.dashboard-metric:hover {
   }
 }
 
+/* Filtros da tela de lotes: cada campo ocupa só a própria coluna (o select de etapa não invade a data). */
+.lots-filter-grid > label {
+  min-width: 0 !important;
+}
+.lots-filter-grid input,
+.lots-filter-grid select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}

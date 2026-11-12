@@ -1,15 +1,17 @@
 import { db } from "@/lib/db";
+import { CODIGOS_LOJA, lojaDoContrato, siglaDaLoja } from "@/lib/lojas";
 import { median, timelineKey, timelinePoints, timelineUnit, type PainelFilters } from "@/lib/painel";
 
 export const LOJA_NAO_IDENTIFICADA = "Não identificada";
 
-/** Lotes emitidos no período e no recorte dos filtros (loja vem das passagens do lote). */
+/** Lotes emitidos no período e no recorte dos filtros (loja = sigla inicial do contrato). */
 function lotesWhere(filters: PainelFilters) {
+  const sigla = siglaDaLoja(filters.loja);
   return {
     dataCriacao: { gte: filters.from, ...(filters.to ? { lt: filters.to } : {}) },
     ...(filters.situacao ? { status: filters.situacao } : {}),
     ...(filters.etapa ? { etapaRegua: filters.etapa } : {}),
-    ...(filters.loja ? { passagens: { some: { lojaRetirada: filters.loja } } } : {}),
+    ...(sigla ? { numeroContrato: { startsWith: sigla, mode: "insensitive" as const } } : {}),
   };
 }
 
@@ -46,10 +48,9 @@ export async function loadLotes(filters: PainelFilters): Promise<LotePainel[]> {
       formaPagamento: true,
       valorRecebidoCentavos: true,
       baixaManual: true,
-      passagens: { select: { lojaRetirada: true }, take: 1 },
     },
   });
-  return rows.map(({ passagens, ...lote }) => ({ ...lote, loja: passagens[0]?.lojaRetirada || LOJA_NAO_IDENTIFICADA }));
+  return rows.map((lote) => ({ ...lote, loja: lojaDoContrato(lote.numeroContrato) ?? LOJA_NAO_IDENTIFICADA }));
 }
 
 export type Totais = {
@@ -122,10 +123,9 @@ export function linhaDoTempo(lotes: LotePainel[], filters: PainelFilters, now = 
   return { unit, points: timelinePoints(from, to, unit, totals) };
 }
 
-/** Lojas que já aparecem nas passagens, para o filtro. */
-export async function listarLojas() {
-  const rows = await db.passagemPedagio.findMany({ distinct: ["lojaRetirada"], select: { lojaRetirada: true }, orderBy: { lojaRetirada: "asc" } });
-  return rows.map((r) => r.lojaRetirada).filter(Boolean);
+/** Lojas da Foco para o filtro (lista oficial). */
+export function listarLojas() {
+  return CODIGOS_LOJA;
 }
 
 /** Inadimplentes de qualquer data (régua encerrada sem pagamento), dos mais antigos para os mais recentes. */

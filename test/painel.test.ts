@@ -35,10 +35,10 @@ test("datas De/Até têm prioridade, são reordenadas e o fim é exclusivo", () 
 });
 
 test("filtros inválidos são ignorados e a query mantém os válidos", () => {
-  const f = parsePainelFilters({ situacao: "QUALQUER", etapa: "D99", loja: "São Paulo - Congonhas" }, NOW);
+  const f = parsePainelFilters({ situacao: "QUALQUER", etapa: "D99", loja: "SAO11 - CGH" }, NOW);
   assert.equal(f.situacao, undefined);
   assert.equal(f.etapa, undefined);
-  assert.equal(painelQuery(f, { p: 2 }), "periodo=7dias&loja=S%C3%A3o+Paulo+-+Congonhas&p=2");
+  assert.equal(painelQuery(f, { p: 2 }), "periodo=7dias&loja=SAO11+-+CGH&p=2");
   assert.equal(parsePainelFilters({ situacao: "PAGO", etapa: "D7" }, NOW).situacao, "PAGO");
 });
 

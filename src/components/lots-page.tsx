@@ -198,6 +198,7 @@ export function LotsPage() {
         {/* Formulário de Busca e Filtros */}
         <form onSubmit={handleFilterSubmit}>
           <div
+            className="lots-filter-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
@@ -230,10 +231,10 @@ export function LotsPage() {
               Etapa da Régua
               <select value={etapaRegua} onChange={(e) => setEtapaRegua(e.target.value)}>
                 <option value="TODAS">Todas as etapas</option>
-                <option value="D0">D+0 (Emissão / Link Adyen)</option>
-                <option value="D5">D+5 (1ª Tentativa Débito)</option>
-                <option value="D7">D+7 (Lembrete Ativo)</option>
-                <option value="D10">D+10 (2ª Tentativa / Negativação)</option>
+                <option value="D0">D+0 (Cobrança inicial)</option>
+                <option value="D5">D+2 (1ª tentativa no cartão)</option>
+                <option value="D7">D+5 (Última cobrança)</option>
+                <option value="D10">D+7 (2ª tentativa no cartão)</option>
               </select>
             </label>
 

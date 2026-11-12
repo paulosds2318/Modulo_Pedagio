@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth";
-import { linhaDoTempo, listarInadimplentes, listarLojas, loadLotes, porLoja, totalizar, type Totais } from "@/lib/server/painel-data";
+import { LOJA_NAO_IDENTIFICADA, linhaDoTempo, listarInadimplentes, listarLojas, loadLotes, porLoja, totalizar, type Totais } from "@/lib/server/painel-data";
 import { FORMAS_PAGAMENTO } from "@/lib/baixa-manual";
 import {
   ETAPAS,
@@ -232,7 +232,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
               {lojasResumo.map((item) => (
                 <tr key={item.loja}>
                   <td className="strong">
-                    {item.loja === filters.loja ? item.loja : <Link href={`/painel?${painelQuery({ ...filters, loja: item.loja })}`}>{item.loja}</Link>}
+                    {item.loja === filters.loja || item.loja === LOJA_NAO_IDENTIFICADA ? item.loja : <Link href={`/painel?${painelQuery({ ...filters, loja: item.loja })}`}>{item.loja}</Link>}
                   </td>
                   <td>{item.lotes}</td>
                   <td>{item.passagens}</td>

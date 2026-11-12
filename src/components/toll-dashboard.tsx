@@ -163,7 +163,7 @@ export function TollDashboard() {
         <article>
           <span>Lotes em Cobrança</span>
           <strong>{loading || !resumo ? "…" : resumo.emRegua}</strong>
-          <small>Régua ativa (D+0 a D+10)</small>
+          <small>Régua ativa (D+0 a D+7)</small>
         </article>
 
         <article>

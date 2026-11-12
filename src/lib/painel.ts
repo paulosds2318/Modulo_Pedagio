@@ -1,3 +1,4 @@
+import { CODIGOS_LOJA } from "./lojas.ts";
 /**
  * Regras do painel de acompanhamento (período, filtros, comparação e gráfico), no mesmo padrão do painel da
  * Conciliação DMA. Sem dependências de servidor, para ser testável com `node --test`.
@@ -7,7 +8,7 @@ export const PERIODS = { hoje: "Hoje", "7dias": "Últimos 7 dias", "30dias": "Ú
 export type Period = keyof typeof PERIODS;
 
 export const SITUACOES: Record<string, string> = { EM_REGUA: "Em régua", PAGO: "Pago", INADIMPLENTE: "Inadimplente", CANCELADO: "Cancelado" };
-export const ETAPAS: Record<string, string> = { D0: "D+0", D5: "D+5", D7: "D+7", D10: "D+10" };
+export const ETAPAS: Record<string, string> = { D0: "D+0", D5: "D+2", D7: "D+5", D10: "D+7" };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Brasília não tem horário de verão desde 2019: o horário local é sempre UTC-3. */
@@ -50,7 +51,7 @@ export function parsePainelFilters(params: SearchParams, now = new Date()): Pain
   const situacao = param(params, "situacao");
   const etapa = param(params, "etapa");
   const scope = {
-    loja: param(params, "loja")?.slice(0, 100),
+    loja: CODIGOS_LOJA.find((codigo) => codigo === param(params, "loja")),
     situacao: situacao && situacao in SITUACOES ? situacao : undefined,
     etapa: etapa && etapa in ETAPAS ? etapa : undefined,
   };
