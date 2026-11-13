@@ -1,3 +1,4 @@
+import { BackToHome } from "@/components/back-to-home";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth";
@@ -103,6 +104,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
 
   return (
     <main className="shell dashboard-shell">
+      <BackToHome />
       <header className="dashboard-heading">
         <div>
           <span className="eyebrow">Gestão · Pedágios</span>

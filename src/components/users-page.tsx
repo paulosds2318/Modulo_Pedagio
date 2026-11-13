@@ -1,5 +1,6 @@
 "use client";
 
+import { BackToHome } from "@/components/back-to-home";
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import Link from "next/link";
@@ -225,6 +226,7 @@ export function UsersPage() {
 
   return (
     <main className="shell">
+      <BackToHome />
       <header className="page-heading">
         <div className="page-heading-left">
           <span className="eyebrow">Segurança & Controle de Acesso</span>

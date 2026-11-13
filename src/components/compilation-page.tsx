@@ -1,5 +1,6 @@
 "use client";
 
+import { BackToHome } from "@/components/back-to-home";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth-client";
@@ -162,6 +163,7 @@ export function CompilationPage() {
 
   return (
     <main className="shell">
+      <BackToHome />
       <header className="page-heading">
         <div className="page-heading-left">
           <span className="eyebrow">Operação · Faturamento</span>

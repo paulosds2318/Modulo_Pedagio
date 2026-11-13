@@ -1,3 +1,4 @@
+import { BackToHome } from "@/components/back-to-home";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -55,6 +56,7 @@ export default async function TratamentoManualPage({ searchParams }: { searchPar
 
   return (
     <main className="shell dashboard-shell">
+      <BackToHome />
       <header className="dashboard-heading">
         <div>
           <span className="eyebrow">Cobrança · Fim da régua</span>

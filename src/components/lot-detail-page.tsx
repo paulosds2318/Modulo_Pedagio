@@ -285,6 +285,7 @@ export function LotDetailPage() {
         <Link href="/lotes">← Voltar para Lotes</Link>
         <span>/</span>
         <span>Lote #{lot.id}</span>
+        <Link href="/" style={{ marginLeft: "auto" }}>Tela inicial</Link>
       </div>
       <header className="page-heading">
         <div className="page-heading-left">

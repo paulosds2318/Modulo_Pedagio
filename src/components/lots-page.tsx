@@ -1,5 +1,6 @@
 "use client";
 
+import { BackToHome } from "@/components/back-to-home";
 import Link from "next/link";
 import { formatCpf } from "@/lib/pii";
 import { useEffect, useState, useCallback } from "react";
@@ -163,6 +164,7 @@ export function LotsPage() {
 
   return (
     <main className="shell">
+      <BackToHome />
       <header className="page-heading">
         <div className="page-heading-left">
           <span className="eyebrow">Gestão Financeira · Cobrança e Conciliação</span>
