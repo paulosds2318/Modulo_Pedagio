@@ -75,7 +75,11 @@ function getCredentials() {
   return { login, password };
 }
 
-async function loginToCoral(force = false): Promise<string> {
+export function limparTokenCoral() {
+  cachedToken = null;
+}
+
+export async function loginToCoral(force = false): Promise<string> {
   if (cachedToken && !force) return cachedToken;
   if (tokenRequest && !force) return tokenRequest;
 

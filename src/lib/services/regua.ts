@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { chargeStoredPaymentMethod, expirePaymentLink } from "@/lib/adyen";
-import { getStoredPaymentMethod } from "@/lib/services/coral";
+import { expirePaymentLink } from "@/lib/adyen";
+import { buscarCartoes, chaveCarteira, cobrarNaCarteira, type CartaoSalvo } from "@/lib/services/coral-carteira";
 import { obterPrazosRegua } from "@/lib/services/config-regua";
 import { gerarNovoLink } from "@/lib/services/novo-link";
 import { notificarCliente } from "@/lib/services/notificacoes";
@@ -74,50 +74,59 @@ async function tentarDebito(loteId: number, etapa: "D5" | "D10", prazos: PrazosR
     }
   }
 
-  // 3. Débito no cartão indisponível (sem credenciais ou sem cartão) conta como não aprovado: a régua segue.
-  if (!process.env.ADYEN_API_KEY || !process.env.ADYEN_MERCHANT_ACCOUNT) {
-    await addLog(loteId, etapa, "COBRAR_CARTAO", "Adyen", "NAO_CONFIGURADO", "Credenciais Adyen ausentes; débito no cartão não realizado.");
+  // 3. Débito no cartão indisponível (sem chave da carteira ou sem cartão) conta como não aprovado: a régua segue.
+  if (!chaveCarteira()) {
+    await addLog(loteId, etapa, "COBRAR_CARTAO", "Coral", "NAO_CONFIGURADO", "CORAL_WALLET_ENCODE ausente; débito no cartão não realizado.");
     return "NAO_APROVADO";
   }
-  let token: string | null;
+  // Uma tentativa anterior sem resposta confiável pode ter debitado: não repete até alguém conferir no Coral.
+  const incerto = await db.logRegua.findFirst({ where: { loteId, acao: "COBRAR_CARTAO", resultado: "INCERTO" }, select: { id: true } });
+  if (incerto) {
+    await addLog(loteId, etapa, "AGUARDAR_CONFERENCIA", "Sistema", "AGUARDANDO",
+      "Débito anterior sem confirmação. Conferir no Coral se o cartão foi debitado e dar baixa manual (ou cancelar) antes de seguir.");
+    return "AGUARDAR";
+  }
+  let cartoes: CartaoSalvo[];
   try {
-    token = await getStoredPaymentMethod(fresh.numeroContrato, fresh.cpfCliente);
+    cartoes = await buscarCartoes(fresh.numeroContrato, fresh.cpfCliente);
   } catch (error) {
     await addLog(loteId, etapa, "CONSULTAR_TOKEN", "Coral", "FALHA", error instanceof Error ? error.message : "Falha na comunicação com o Coral.");
     return "NAO_APROVADO";
   }
-  if (!token) {
+  if (!cartoes.length) {
     await addLog(loteId, etapa, "CONSULTAR_TOKEN", "Coral", "SEM_CARTAO", "Cliente sem cartão tokenizado no Coral.");
     return "NAO_APROVADO";
   }
+  const cartao = cartoes[0];
+  const rotuloCartao = [cartao.bandeira, cartao.finalCartao ? `final ${cartao.finalCartao}` : null].filter(Boolean).join(" ") || "cartão salvo";
 
-  // 4. Débito via Adyen (cartão salvo).
-  try {
-    const result = await chargeStoredPaymentMethod(fresh.id, etapa, fresh.valorFinalCentavos, fresh.numeroContrato, token);
-    if (result?.resultCode === "Authorised") {
-      const update = await db.loteCobranca.updateMany({
-        where: { id: fresh.id, status: "EM_REGUA" },
-        data: { status: "PAGO", dataPagamento: new Date(), adyenPspReference: result.pspReference, formaPagamento: "CARTAO", valorRecebidoCentavos: fresh.valorFinalCentavos },
-      });
-      if (update.count > 0) {
-        await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "APROVADO", `Débito autorizado no cartão (PSP: ${result.pspReference}).`, result.pspReference);
-        return "PAGO";
-      }
-      await addLog(fresh.id, etapa, "ALERTA_DUPLICIDADE_DEBITO", "Adyen", "ESTORNO_NECESSARIO",
-        `Cartão autorizado (PSP: ${result.pspReference}), mas o lote já tinha sido pago por outro canal. Necessário estorno.`);
-      return "JA_PAGO";
+  // 4. Débito no cartão salvo, pela carteira do Coral.
+  const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
+  const r = await cobrarNaCarteira({ cpf: fresh.cpfCliente, contrato: fresh.numeroContrato, cartao, valorCentavos: fresh.valorFinalCentavos, dia });
+  if (r.resultado === "APROVADO") {
+    const update = await db.loteCobranca.updateMany({
+      where: { id: fresh.id, status: "EM_REGUA" },
+      data: { status: "PAGO", dataPagamento: new Date(), adyenPspReference: r.transactionId, formaPagamento: "CARTAO", valorRecebidoCentavos: fresh.valorFinalCentavos },
+    });
+    if (update.count > 0) {
+      await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Coral", "APROVADO", `Débito autorizado no ${rotuloCartao} (transação ${r.transactionId}).`, r.transactionId);
+      return "PAGO";
     }
-    if (result?.resultCode === "Refused") {
-      await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "RECUSADO",
-        `Débito recusado: ${result.refusalReason || "não autorizado pelo emissor"} (PSP: ${result.pspReference || "N/A"}).`, result.pspReference);
-      return "NAO_APROVADO";
-    }
-    await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "PENDENTE", `Resultado não conclusivo (${result?.resultCode ?? "sem resposta"}). Aguardando.`);
-    return "AGUARDAR";
-  } catch (error) {
-    await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Adyen", "FALHA", error instanceof Error ? error.message : "Falha na chamada de cobrança à Adyen.");
+    await addLog(fresh.id, etapa, "ALERTA_DUPLICIDADE_DEBITO", "Coral", "ESTORNO_NECESSARIO",
+      `Cartão debitado (transação ${r.transactionId}), mas o lote já tinha sido pago por outro canal. Necessário estorno.`);
+    return "JA_PAGO";
+  }
+  if (r.resultado === "RECUSADO") {
+    await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Coral", "RECUSADO", `Débito recusado no ${rotuloCartao}: ${r.motivo}.`);
+    return "NAO_APROVADO";
+  }
+  if (r.resultado === "ERRO") {
+    await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Coral", "FALHA", `Débito não realizado: ${r.motivo}`);
     return "AGUARDAR";
   }
+  await addLog(fresh.id, etapa, "COBRAR_CARTAO", "Coral", "INCERTO", `Débito sem confirmação (${r.motivo}). O cartão pode ter sido debitado.`);
+  await addLog(fresh.id, etapa, "ERRO_PROCESSAMENTO", "Sistema", "ALERTA", "Débito no cartão sem confirmação: conferir no Coral antes de qualquer nova tentativa.");
+  return "AGUARDAR";
 }
 
 /** Gera novo link e comunica o cliente com o template da etapa. */

@@ -47,8 +47,8 @@ A resposta deve seguir o mesmo contrato de `POST /api/passagens` (os 10 campos o
 
 | Variável | O que configura | Quando usar |
 |---|---|---|
-| **ADYEN_API_KEY** | Credencial usada para consultar links Adyen e realizar cobranças em cartão tokenizado. | Configure com a chave da Adyen quando esses recursos forem usados. |
-| **ADYEN_MERCHANT_ACCOUNT** | Conta de comerciante usada nas operações e validada nas notificações. | Necessária junto com ADYEN_API_KEY. |
+| **ADYEN_API_KEY** | Credencial para consultar links criados direto na Adyen (o débito no cartão não usa mais a Adyen direta: vai pelo Coral). | Opcional. |
+| **ADYEN_MERCHANT_ACCOUNT** | Conta de comerciante usada nas notificações e nas consultas Adyen. | Necessária junto com ADYEN_API_KEY. |
 | **ADYEN_ENVIRONMENT** | Ambiente da API: test ou live. | Padrão test. Somente live seleciona produção. |
 | **ADYEN_API_VERSION** | Versão do endpoint Checkout API. | Opcional; padrão v71. |
 | **ADYEN_LIVE_PREFIX** | Prefixo de região/endpoint da conta Live Adyen. | Obrigatório quando ADYEN_ENVIRONMENT=live. |
@@ -58,8 +58,7 @@ A resposta deve seguir o mesmo contrato de `POST /api/passagens` (os 10 campos o
 
 | Variável | O que configura | Quando usar |
 |---|---|---|
-| **CORAL_API_TOKEN** | Bearer enviado ao Coral para consultar o cartão tokenizado do contrato e CPF. | Necessário para consultar cartão tokenizado. |
-| **CORAL_TOKEN_LOOKUP_URL** | Endpoint Coral que recebe numeroContrato e cpfCliente e retorna storedPaymentMethodId. | Necessário junto com CORAL_API_TOKEN para tentativas de cobrança no cartão. |
+| **CORAL_WALLET_ENCODE** | Chave de criptografia (AES-256) do payload do débito no cartão salvo, pelo Coral (`/wallet-payment`). | Obrigatória para o débito automático do D+2 e do D+7; sem ela o débito não é tentado e a régua segue. Pedir ao time do Coral; use o valor do ambiente certo (homologação ou produção). Nunca publique. |
 
 ## WhatsApp
 
