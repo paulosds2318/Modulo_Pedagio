@@ -8,7 +8,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test test/security.test.ts test/date-range.test.ts test/pii.test.ts test/passagem-schema.test.ts test/painel.test.ts test/regua-config.test.ts test/agendador.test.ts test/baixa-manual.test.ts test/cancelamento.test.ts test/link-data.test.ts",
+    "test": "node --experimental-strip-types --test test/security.test.ts test/date-range.test.ts test/pii.test.ts test/passagem-schema.test.ts test/painel.test.ts test/regua-config.test.ts test/agendador.test.ts test/baixa-manual.test.ts test/cancelamento.test.ts test/link-data.test.ts test/lojas.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",

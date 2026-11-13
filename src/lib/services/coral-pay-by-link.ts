@@ -1,7 +1,21 @@
-const API_BASE = (process.env.CORAL_PAY_BY_LINK_BASE_URL?.trim() || "https://servicescoral.aluguefoco.com.br").replace(/\/$/, "");
-const LOGIN = `${API_BASE}/api/auth/login`;
-const RENT_AGREEMENT = `${API_BASE}/api/rentagreement`;
-const CREATE_LINK = `${API_BASE}/api/adyen-pay-by-link/v2/create`;
+const CORAL_PRODUCAO = "https://servicescoral.aluguefoco.com.br";
+const CORAL_HOMOLOG = "https://homologservicescoral.aluguefoco.com.br";
+
+/**
+ * Base da API do Coral. Só ADYEN_ENVIRONMENT=live usa produção (servicescoral); sem essa variável o padrão é a
+ * homologação, e uma URL de produção configurada fora de "live" é recusada: nada de link real por engano.
+ */
+export function resolverBaseCoral(configurada = process.env.CORAL_PAY_BY_LINK_BASE_URL, ambiente = process.env.ADYEN_ENVIRONMENT): string {
+  const live = ambiente === "live";
+  const base = (configurada?.trim() || (live ? CORAL_PRODUCAO : CORAL_HOMOLOG)).replace(/\/$/, "");
+  if (!live && !new URL(base).hostname.toLowerCase().includes("homolog")) {
+    throw new Error(`Ambiente de teste não pode usar o Coral de produção (${new URL(base).hostname}). Use a URL de homologação ou ADYEN_ENVIRONMENT=live.`);
+  }
+  return base;
+}
+const LOGIN = () => `${resolverBaseCoral()}/api/auth/login`;
+const RENT_AGREEMENT = () => `${resolverBaseCoral()}/api/rentagreement`;
+const CREATE_LINK = () => `${resolverBaseCoral()}/api/adyen-pay-by-link/v2/create`;
 
 let cachedToken: string | null = null;
 let tokenRequest: Promise<string> | null = null;
@@ -67,7 +81,7 @@ async function loginToCoral(force = false): Promise<string> {
 
   tokenRequest = (async () => {
     const credentials = getCredentials();
-    const response = await fetch(LOGIN, {
+    const response = await fetch(LOGIN(), {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(credentials),
@@ -119,7 +133,7 @@ export async function createCoralPaymentLink(input: {
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = await loginToCoral(attempt > 0);
-    const agreementResponse = await fetch(`${RENT_AGREEMENT}/${encodeURIComponent(input.contract)}`, {
+    const agreementResponse = await fetch(`${RENT_AGREEMENT()}/${encodeURIComponent(input.contract)}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       cache: "no-store",
@@ -146,7 +160,7 @@ export async function createCoralPaymentLink(input: {
       ...(dataReferenciaLink(customer.dateInRA) ? { dateInRA: dataReferenciaLink(customer.dateInRA) } : {}),
       typePayDue: "due",
     };
-    const response = await fetch(CREATE_LINK, {
+    const response = await fetch(CREATE_LINK(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -169,17 +183,36 @@ export async function createCoralPaymentLink(input: {
     if (!response.ok || typeof data.link !== "string" || !data.link.startsWith("https://")) {
       throw new Error(`Coral Pay By Link falhou ao criar link (HTTP ${response.status}).`);
     }
+    const erroAmbiente = verificarAmbienteDoLink(data.link);
+    if (erroAmbiente) throw new Error(erroAmbiente);
     return { url: data.link, nomeCliente: customer.name, telefoneContato: customer.phone };
   }
 
   throw new Error("Coral Pay By Link recusou a autenticação após renovar o token.");
 }
 
+/**
+ * Fora de produção (ADYEN_ENVIRONMENT diferente de "live") só vale link de teste: o checkout de homologação do Coral
+ * (homologcheckout…) ou o link do ambiente de testes da Adyen (test.adyen.link). Link de produção nunca é salvo nem
+ * enviado ao cliente. Devolve a mensagem de erro, ou null se estiver ok.
+ */
+export function verificarAmbienteDoLink(link: string, ambiente = process.env.ADYEN_ENVIRONMENT): string | null {
+  if (ambiente === "live") return null;
+  let host = "";
+  try {
+    host = new URL(link).hostname.toLowerCase();
+  } catch {
+    return "O Coral devolveu um link de pagamento inválido.";
+  }
+  if (host === "test.adyen.link" || host.includes("homolog")) return null;
+  return `O Coral devolveu um link que não é de teste (${host}). Em teste só são aceitos o checkout de homologação do Coral e test.adyen.link; o link foi descartado. Confira a configuração do ambiente de homologação no Coral.`;
+}
+
 /** Nome e telefone do cliente no contrato do Coral (GET /api/rentagreement/{contrato}); null se não encontrado. */
 export async function consultarContatoCliente(contract: string): Promise<{ nome: string | null; telefone: string | null } | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = await loginToCoral(attempt > 0);
-    const response = await fetch(`${RENT_AGREEMENT}/${encodeURIComponent(contract)}`, {
+    const response = await fetch(`${RENT_AGREEMENT()}/${encodeURIComponent(contract)}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),

@@ -90,7 +90,7 @@ Cada execução aparece no painel (cartão "Rotina automática"), com alerta se 
 
 | Variável | O que configura | Quando usar |
 |---|---|---|
-| **CORAL_PAY_BY_LINK_BASE_URL** | URL base da API de Pay By Link; padrão `https://servicescoral.aluguefoco.com.br`. | Só altere se o fornecedor disponibilizar outra base. |
+| **CORAL_PAY_BY_LINK_BASE_URL** | URL base da API de Pay By Link do Coral. | Sem ela, o padrão é a homologação (`https://homologservicescoral.aluguefoco.com.br`); só com `ADYEN_ENVIRONMENT=live` o padrão passa a ser produção (`https://servicescoral.aluguefoco.com.br`). Fora de `live`, uma URL de produção é recusada e o link precisa ser de teste (checkout `homologcheckout…` do Coral ou `test.adyen.link`); qualquer outro é descartado. |
 | **CORAL_PAY_BY_LINK_LOGIN** | Login usado em `POST /api/auth/login`. | Obrigatório para gerar links de pagamento. |
 | **CORAL_PAY_BY_LINK_PASSWORD** | Senha correspondente ao login. | Obrigatória; mantenha em segredo local ou no gerenciador de secrets do Render. |
 | **CORAL_PAY_BY_LINK_VALIDADE_DIAS** | Validade do link de pagamento, em dias a partir da emissão (enviada em `dateInRA`). | Opcional; padrão 15, de 1 a 60. O checkout mostra "Reserva expirada" quando essa data passa; a régua gera links novos automaticamente no D+2 e no D+5. |
