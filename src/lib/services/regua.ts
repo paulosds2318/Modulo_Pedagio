@@ -1,3 +1,4 @@
+import { valorEmAberto } from "@/lib/links-pagamento";
 import { db } from "@/lib/db";
 import { expirePaymentLink } from "@/lib/adyen";
 import { buscarCartoes, chaveCarteira, cobrarNaCarteira, type CartaoSalvo } from "@/lib/services/coral-carteira";
@@ -102,7 +103,7 @@ async function tentarDebito(loteId: number, etapa: "D5" | "D10", prazos: PrazosR
 
   // 4. Débito no cartão salvo, pela carteira do Coral.
   const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
-  const r = await cobrarNaCarteira({ cpf: fresh.cpfCliente, contrato: fresh.numeroContrato, cartao, valorCentavos: fresh.valorFinalCentavos, dia });
+  const r = await cobrarNaCarteira({ cpf: fresh.cpfCliente, contrato: fresh.numeroContrato, cartao, valorCentavos: valorEmAberto(fresh.valorFinalCentavos, fresh.valorPagoCentavos), dia });
   if (r.resultado === "APROVADO") {
     const update = await db.loteCobranca.updateMany({
       where: { id: fresh.id, status: "EM_REGUA" },

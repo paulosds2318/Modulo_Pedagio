@@ -1,3 +1,4 @@
+import { aplicarPagamentoLink } from "@/lib/services/links-pagamento";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isValidAdyenHmac } from "@/lib/adyen";
@@ -30,6 +31,15 @@ export async function POST(request: Request) {
     }
 
     const reference = String(item.merchantReference ?? "");
+    // Links por passagem (LINK_<id>): a baixa é por link, com as regras de pagamento parcial e de duplicidade.
+    const linkRef = /^LINK_(\d+)$/.exec(reference);
+    if (linkRef) {
+      if (String(item.eventCode ?? "") === "AUTHORISATION" && String(item.success).toLowerCase() === "true") {
+        const valor = Number(((item.amount ?? {}) as Record<string, unknown>).value ?? 0);
+        await aplicarPagamentoLink(Number(linkRef[1]), { valorCentavos: valor > 0 ? valor : null, pagoEm: new Date(), forma: "ADYEN_LINK", transacaoId: String(item.pspReference ?? "") || null });
+      }
+      continue;
+    }
     const match = /^LOTE_(\d+)(?:_|$)/.exec(reference);
     if (!match) continue;
 

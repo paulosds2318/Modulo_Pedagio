@@ -43,7 +43,7 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 - `/lotes/[id]`: detalhes, passagens, link, eventos da régua e consulta sob demanda do status Adyen.
 - `/painel`: painel de acompanhamento por período, loja, situação e etapa, com comparação ao período anterior, gráfico, tabela por loja, funil da régua, saúde das integrações (inclui a última sincronização com o Coral) e exportação em Excel.
 - `/configuracoes/regua` (administradores): prazos da régua em dias após a emissão (padrão D+2, D+5 e D+7) e validade do link de pagamento (padrão 48 h), usados pela rotina automática.
-- `/tratamento-manual`: lotes que passaram por toda a régua sem pagamento (aviso de cobrança extrajudicial), para negociação e baixa manual.
+- `/tratamento-manual`: lotes que passaram por toda a régua sem pagamento (aviso de cobrança extrajudicial). Administradores geram o link de pagamento de um lote ou de vários de uma vez (cobrança em lote).
 - `/auditoria` (somente o administrador master): registro de compilações manuais, consultas à Adyen, sincronizações manuais, exportações, alterações de prazos e de usuários.
 
 ## Integrações e contratos canônicos
@@ -60,6 +60,22 @@ O Docker Compose serve para desenvolvimento e validação do container. Para o d
 - `POST /api/lotes/[id]/consultar-adyen`: consulta o status do link na Adyen; exige sessão de administrador. Só atualiza o lote como pago após validar status, referência, moeda e valor.
 
 As integrações externas ainda não foram conectadas nem validadas com os fornecedores. O adaptador WhatsApp assume `POST {to,text,reference}` e pode retornar `{messageId}`; para retentativas seguras, o gateway precisa deduplicar pelo campo estável `reference`. O adaptador de consulta de token Coral assume `POST {numeroContrato,cpfCliente}` e resposta `{storedPaymentMethodId}`. Confirme autenticação, payloads, idempotência e tratamento de erros com cada fornecedor antes de habilitar em produção. PAN e CVV não são armazenados.
+
+## Links de pagamento por passagem
+
+Cada passagem tem um ID próprio (`#id` na tela do lote). No detalhe do lote, administradores geram o link de pagamento
+para todas as passagens em aberto (padrão) ou só as marcadas; a taxa do lote vai no link que cobre todas as que restam.
+Cada link é gravado com as passagens que cobre e é enviado ao Coral com a referência `LINK_<id>`.
+
+- `POST /api/links` (administradores, sessão): `{ "loteId" | "contrato" | "passagemIds": [...] }`. Por lote ou contrato cobre
+  todas as passagens em aberto, ou só as de `passagemIds`; só com `passagemIds` descobre o lote pelas passagens.
+- `POST /api/links/lote` (administradores, sessão): `{ "loteIds": [...] }` (até 50). Um link por lote, com o resultado de cada
+  um (uma falha não impede os demais).
+- `POST /api/webhooks/pagamento` (Bearer `PAGAMENTO_WEBHOOK_TOKEN`): retorno de pagamento do Coral para a baixa automática.
+  Corpo: `{ "reference": "LINK_<id>", "status": "PAID" | "EXPIRED" | "REFUSED", "valorCentavos" | "amount", "paidAt", "paymentMethod", "transactionId" }`.
+  Idempotente. Com valor diferente do link não baixa (alerta de divergência). Link pago que cobre só parte das passagens abate o
+  lote e a régua segue com o restante; sem passagem em aberto, o lote é baixado e a régua encerra. Pagamento duplicado (lote já
+  pago ou cancelado) gera alerta de estorno. Esse é o contrato pedido ao time de TI do Coral e pode mudar quando eles responderem.
 
 ## Configuração
 

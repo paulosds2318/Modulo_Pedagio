@@ -115,9 +115,10 @@ export async function createPaymentLink(
   contract: string,
   cpf: string,
   dateInRA?: Date | null,
-  versao?: number
+  versao?: number,
+  extras: { reference?: string; idempotencyKey?: string } = {}
 ) {
-  return createCoralPaymentLink({ lotId, cents, contract, cpf, dateInRA, versao });
+  return createCoralPaymentLink({ lotId, cents, contract, cpf, dateInRA, versao, ...extras });
 }
 
 export async function getPaymentLink(linkId: string) {

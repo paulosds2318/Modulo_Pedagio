@@ -21,6 +21,7 @@ export async function GET(_request: Request, context: RouteContext) {
       include: {
         passagens: { orderBy: { dataHora: "asc" } },
         logs: { orderBy: { dataHora: "desc" } },
+        links: { orderBy: { criadoEm: "desc" }, include: { passagens: { select: { passagemId: true } } } },
       },
     });
     // Lotes sem nome/telefone de contato: busca no contrato do Coral e grava o que faltar.

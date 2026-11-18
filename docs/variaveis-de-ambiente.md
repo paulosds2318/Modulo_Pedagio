@@ -59,6 +59,7 @@ A resposta deve seguir o mesmo contrato de `POST /api/passagens` (os 10 campos o
 | Variável | O que configura | Quando usar |
 |---|---|---|
 | **CORAL_WALLET_ENCODE** | Chave de criptografia (AES-256) do payload do débito no cartão salvo, pelo Coral (`/wallet-payment`). | Obrigatória para o débito automático do D+2 e do D+7; sem ela o débito não é tentado e a régua segue. Pedir ao time do Coral; use o valor do ambiente certo (homologação ou produção). Nunca publique. |
+| **PAGAMENTO_WEBHOOK_TOKEN** | Segredo Bearer que autentica o retorno de pagamento do Coral em `POST /api/webhooks/pagamento` (baixa automática). | Obrigatório para a baixa automática; sem ele o webhook responde 503. Gere um valor longo e aleatório e informe ao time do Coral por canal seguro. |
 
 ## WhatsApp
 

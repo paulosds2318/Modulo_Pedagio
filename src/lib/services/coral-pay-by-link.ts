@@ -132,7 +132,11 @@ export async function createCoralPaymentLink(input: {
   dateInRA?: Date | null;
   /** 1 no primeiro link do lote; 2, 3… para links novos (cada versão usa uma chave de idempotência própria). */
   versao?: number;
-}): Promise<{ id?: string; url: string; nomeCliente?: string; telefoneContato?: string }> {
+  /** Referência enviada ao Coral e devolvida no retorno do pagamento (padrão LOTE_<id>; links novos usam LINK_<id>). */
+  reference?: string;
+  /** Chave de idempotência da criação (padrão foco-toll-lot-<id>-link-v<versão>). */
+  idempotencyKey?: string;
+}): Promise<{ id?: string; url: string; nomeCliente?: string; telefoneContato?: string; email?: string }> {
   if (input.cents <= 0) throw new Error("Valor do link deve ser maior que zero.");
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -153,7 +157,7 @@ export async function createCoralPaymentLink(input: {
     }
     const customer = agreementCustomer(agreementResult, input.dateInRA);
     const body = {
-      reference: `LOTE_${input.lotId}`,
+      reference: input.reference ?? `LOTE_${input.lotId}`,
       amount: { value: input.cents / 100 },
       isPrePayment: false,
       isFromApp: false,
@@ -170,7 +174,7 @@ export async function createCoralPaymentLink(input: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         Accept: "application/json",
-        "Idempotency-Key": `foco-toll-lot-${input.lotId}-link-v${input.versao ?? 1}`,
+        "Idempotency-Key": input.idempotencyKey ?? `foco-toll-lot-${input.lotId}-link-v${input.versao ?? 1}`,
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -189,7 +193,7 @@ export async function createCoralPaymentLink(input: {
     }
     const erroAmbiente = verificarAmbienteDoLink(data.link);
     if (erroAmbiente) throw new Error(erroAmbiente);
-    return { url: data.link, nomeCliente: customer.name, telefoneContato: customer.phone };
+    return { url: data.link, nomeCliente: customer.name, telefoneContato: customer.phone, email: customer.email };
   }
 
   throw new Error("Coral Pay By Link recusou a autenticação após renovar o token.");

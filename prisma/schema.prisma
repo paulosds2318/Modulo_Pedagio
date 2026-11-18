@@ -22,8 +22,8 @@ model ContratoLocacao {
 }
 
 model PassagemPedagio {
-  id              Int           @id @default(autoincrement())
-  idCoral         String        @unique
+  id              Int                     @id @default(autoincrement())
+  idCoral         String                  @unique
   numeroContrato  String
   cpfCliente      String
   telefoneCliente String?
@@ -35,7 +35,12 @@ model PassagemPedagio {
   valorCentavos   Int
   lojaRetirada    String
   loteId          Int?
-  lote            LoteCobranca? @relation(fields: [loteId], references: [id])
+  lote            LoteCobranca?           @relation(fields: [loteId], references: [id])
+  /// PENDENTE ou PAGA (paga por um link de pagamento). Lotes pagos por débito/baixa manual encerram todas as passagens.
+  statusPagamento String                  @default("PENDENTE")
+  pagoEm          DateTime?
+  linkPagoId      Int?
+  links           LinkPagamentoPassagem[]
 
   @@index([numeroContrato])
   @@index([loteId])
@@ -48,6 +53,7 @@ model LoteCobranca {
   cpfCliente             String
   nomeCliente            String?
   telefoneContato        String?
+  emailCliente           String?
   telefoneCliente        String?
   quantidadePassagens    Int
   valorTotalCentavos     Int
@@ -66,6 +72,8 @@ model LoteCobranca {
   valorRecebidoCentavos  Int?
   /// Quando o link de pagamento atual vence (emissão + validade configurada). A régua só tenta o débito depois disso.
   linkExpiraEm           DateTime?
+  /// Soma já recebida por links que cobriram só parte das passagens (o débito e os novos links cobram o restante).
+  valorPagoCentavos      Int                 @default(0)
   baixaManual            Boolean             @default(false)
   baixaObservacao        String?
   baixaPor               String?
@@ -81,10 +89,46 @@ model LoteCobranca {
   passagens              PassagemPedagio[]
   logs                   LogRegua[]
   integrationJobs        IntegrationOutbox[]
+  links                  LinkPagamento[]
 
   @@index([numeroContrato])
   @@index([status])
   @@map("lotes_cobranca")
+}
+
+/// Link de pagamento gerado para todas ou algumas passagens de um lote (referência enviada ao Coral: LINK_<id>).
+model LinkPagamento {
+  id             Int                     @id @default(autoincrement())
+  loteId         Int
+  lote           LoteCobranca            @relation(fields: [loteId], references: [id])
+  numeroContrato String
+  valorCentavos  Int
+  url            String
+  linkIdExterno  String?
+  /// ATIVO, PAGO ou CANCELADO.
+  status         String                  @default("ATIVO")
+  /// REGUA, MANUAL (detalhe do lote) ou LOTE (cobrança em lote do tratamento manual).
+  origem         String
+  criadoPor      String?
+  criadoEm       DateTime                @default(now())
+  expiraEm       DateTime
+  pagoEm         DateTime?
+  transacaoId    String?
+  formaPagamento String?
+  passagens      LinkPagamentoPassagem[]
+
+  @@index([loteId])
+  @@map("links_pagamento")
+}
+
+model LinkPagamentoPassagem {
+  linkId     Int
+  passagemId Int
+  link       LinkPagamento   @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  passagem   PassagemPedagio @relation(fields: [passagemId], references: [id])
+
+  @@id([linkId, passagemId])
+  @@map("links_pagamento_passagens")
 }
 
 model LogRegua {

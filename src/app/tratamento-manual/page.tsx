@@ -6,6 +6,7 @@ import { getServerSession, hasRole } from "@/lib/auth";
 import { formatCpf, formatPhone } from "@/lib/pii";
 import { formatDateTime, money, pageParam } from "@/lib/painel";
 import { LinkPagination } from "@/components/link-pagination";
+import { TratamentoManualTabela } from "@/components/tratamento-manual-tabela";
 import { RefreshPageButton } from "@/components/refresh-page-button";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,8 @@ export default async function TratamentoManualPage({ searchParams }: { searchPar
         cpfCliente: true,
         telefoneContato: true,
         valorFinalCentavos: true,
+        valorPagoCentavos: true,
+        quantidadePassagens: true,
         dataCriacao: true,
         d10TentativaAt: true,
       },
@@ -62,8 +65,8 @@ export default async function TratamentoManualPage({ searchParams }: { searchPar
           <span className="eyebrow">Cobrança · Fim da régua</span>
           <h1>Tratamento manual</h1>
           <p>
-            Lotes que passaram por todas as etapas sem pagamento e receberam o aviso de cobrança extrajudicial. Negocie com o cliente e registre a
-            baixa manual (PIX, depósito, acordo) ou o cancelamento no lote.
+            Lotes que passaram por todas as etapas sem pagamento e receberam o aviso de cobrança extrajudicial. Gere um novo link de pagamento (um por lote ou vários de uma vez): quando o cliente
+            pagar, o lote é baixado sozinho. A baixa manual e o cancelamento continuam disponíveis dentro do lote.
           </p>
         </div>
         <div className="dashboard-heading-actions">
@@ -102,49 +105,21 @@ export default async function TratamentoManualPage({ searchParams }: { searchPar
       </section>
 
       <section className="panel dashboard-recent">
-        <div className="table-wrap">
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Lote</th>
-                <th>Cliente</th>
-                <th>Contato</th>
-                <th>Valor</th>
-                <th>Emitido em</th>
-                <th>Régua encerrada em</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lotes.map((l) => (
-                <tr key={l.id}>
-                  <td className="strong">
-                    #{l.id}
-                    <span className="subcell">{l.numeroContrato}</span>
-                  </td>
-                  <td>
-                    {l.nomeCliente || "—"}
-                    <span className="subcell">CPF {formatCpf(l.cpfCliente)}</span>
-                  </td>
-                  <td>{l.telefoneContato ? formatPhone(l.telefoneContato) : "—"}</td>
-                  <td className="strong">{money(l.valorFinalCentavos)}</td>
-                  <td>{formatDateTime(l.dataCriacao)}</td>
-                  <td>{l.d10TentativaAt ? formatDateTime(l.d10TentativaAt) : "—"}</td>
-                  <td>
-                    {isAdmin ? <Link href={`/lotes/${l.id}#baixa`}>Dar baixa →</Link> : <Link href={`/lotes/${l.id}`}>Abrir →</Link>}
-                  </td>
-                </tr>
-              ))}
-              {!lotes.length && (
-                <tr>
-                  <td className="empty" colSpan={7}>
-                    {busca ? "Nenhum lote encontrado com essa busca." : "Nenhum lote em tratamento manual. Toda a régua está em dia."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <TratamentoManualTabela
+          isAdmin={isAdmin}
+          vazio={busca ? "Nenhum lote encontrado com essa busca." : "Nenhum lote em tratamento manual. Toda a régua está em dia."}
+          lotes={lotes.map((l) => ({
+            id: l.id,
+            numeroContrato: l.numeroContrato,
+            nome: l.nomeCliente,
+            cpf: formatCpf(l.cpfCliente) ?? l.cpfCliente,
+            telefone: (l.telefoneContato ? formatPhone(l.telefoneContato) : null) ?? null,
+            valorCentavos: l.valorFinalCentavos - l.valorPagoCentavos,
+            passagens: l.quantidadePassagens,
+            emitidoEm: formatDateTime(l.dataCriacao),
+            encerradoEm: l.d10TentativaAt ? formatDateTime(l.d10TentativaAt) : null,
+          }))}
+        />
         <LinkPagination
           page={page}
           total={total}

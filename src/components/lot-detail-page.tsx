@@ -7,6 +7,7 @@ import { FORMAS_BAIXA_MANUAL, FORMAS_PAGAMENTO, STATUS_PERMITEM_BAIXA, reaisPara
 import { MOTIVOS_CANCELAMENTO, STATUS_PERMITEM_CANCELAMENTO } from "@/lib/cancelamento";
 import { formatCpf, formatPhone } from "@/lib/pii";
 import { PRAZOS_PADRAO, rotuloEtapa, type PrazosRegua } from "@/lib/regua-config";
+import { STATUS_LOTE_COBRAVEL, valorDoLink } from "@/lib/links-pagamento";
 type Entry = {
   id: number;
   etapa: string;
@@ -22,6 +23,7 @@ type Lot = {
   cpfCliente: string;
   nomeCliente: string | null;
   telefoneContato: string | null;
+  emailCliente: string | null;
   telefoneCliente: string | null;
   quantidadePassagens: number;
   valorTotalCentavos: number;
@@ -36,6 +38,7 @@ type Lot = {
   dataPagamento: string | null;
   formaPagamento: string | null;
   valorRecebidoCentavos: number | null;
+  valorPagoCentavos: number;
   baixaManual: boolean;
   baixaObservacao: string | null;
   baixaPor: string | null;
@@ -50,9 +53,24 @@ type Lot = {
     rodovia: string;
     dataHora: string;
     valorCentavos: number;
+    statusPagamento: string;
+  }[];
+  links: {
+    id: number;
+    valorCentavos: number;
+    url: string;
+    status: string;
+    origem: string;
+    criadoPor: string | null;
+    criadoEm: string;
+    expiraEm: string;
+    pagoEm: string | null;
+    passagens: { passagemId: number }[];
   }[];
   logs: Entry[];
 };
+const STATUS_LINK: Record<string, string> = { ATIVO: "Ativo", PAGO: "Pago", CANCELADO: "Cancelado" };
+const ORIGEM_LINK: Record<string, string> = { REGUA: "Régua", MANUAL: "Manual", LOTE: "Cobrança em lote" };
 const money = (c: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     c / 100
@@ -89,6 +107,10 @@ export function LotDetailPage() {
   const [error, setError] = useState("");
   const [queryingAdyen, setQueryingAdyen] = useState(false);
   const [queryMessage, setQueryMessage] = useState("");
+  const [desmarcadas, setDesmarcadas] = useState<number[]>([]);
+  const [gerandoLink, setGerandoLink] = useState(false);
+  const [linkErro, setLinkErro] = useState("");
+  const [copiado, setCopiado] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   async function reload() {
     const response = await fetch(`/api/lotes/${params.id}`);
@@ -164,6 +186,38 @@ export function LotDetailPage() {
       setBaixaErro(cause instanceof Error ? cause.message : "Erro ao registrar a baixa.");
     } finally {
       setSalvandoBaixa(false);
+    }
+  }
+
+  async function gerarLink(passagemIds: number[] | undefined) {
+    if (!lot) return;
+    setGerandoLink(true);
+    setLinkErro("");
+    try {
+      const response = await fetch("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loteId: lot.id, ...(passagemIds ? { passagemIds } : {}) }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Não foi possível gerar o link.");
+      setDesmarcadas([]);
+      await reload();
+      setQueryMessage(`Link ${data.id} gerado (${money(data.valorCentavos)}). Copie e envie ao cliente; quando for pago, o status do lote atualiza sozinho.`);
+    } catch (cause) {
+      setLinkErro(cause instanceof Error ? cause.message : "Erro ao gerar o link.");
+    } finally {
+      setGerandoLink(false);
+    }
+  }
+
+  async function copiarLink(id: number, url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiado(id);
+      window.setTimeout(() => setCopiado((atual) => (atual === id ? null : atual)), 2000);
+    } catch {
+      setLinkErro("Não foi possível copiar. Abra o link e copie o endereço pelo navegador.");
     }
   }
 
@@ -276,6 +330,12 @@ export function LotDetailPage() {
   }
   const logStages = new Set(lot.logs.map((x) => x.etapa));
   const canQueryAdyen = Boolean(lot.adyenLinkId && lot.status !== "PAGO");
+  const podeGerarLink = isAdmin && STATUS_LOTE_COBRAVEL.includes(lot.status);
+  const abertas = lot.passagens.filter((p) => p.statusPagamento !== "PAGA" && lot.status !== "PAGO");
+  const selecionadas = abertas.filter((p) => !desmarcadas.includes(p.id));
+  const cobreTudo = selecionadas.length === abertas.length;
+  const valorSelecionado = valorDoLink(selecionadas, cobreTudo, lot.taxaCentavos);
+  const varias = lot.passagens.length > 1;
   const podeDarBaixa = isAdmin && STATUS_PERMITEM_BAIXA.includes(lot.status);
   const inadimplente = lot.status === "INADIMPLENTE";
   const podeCancelar = isAdmin && STATUS_PERMITEM_CANCELAMENTO.includes(lot.status);
@@ -295,6 +355,7 @@ export function LotDetailPage() {
             Cliente: <span className="strong">{lot.nomeCliente || "Nome não disponível no Coral"}</span>
             {" · "}CPF: <span className="strong">{formatCpf(lot.cpfCliente)}</span>
             {" · "}Telefone: <span className="strong">{lot.telefoneContato ? formatPhone(lot.telefoneContato) : "não disponível"}</span>
+            {" · "}E-mail: <span className="strong">{lot.emailCliente || "não disponível"}</span>
           </p>
           <p>
             Gerado em {new Date(lot.dataCriacao).toLocaleString("pt-BR")} · {lot.quantidadePassagens} passagem(ns) vinculada(s)
@@ -567,21 +628,53 @@ export function LotDetailPage() {
               )}
             </p>
           </div>
+          {podeGerarLink && abertas.length > 0 && (
+            <button
+              type="button"
+              className="button primary"
+              disabled={gerandoLink || selecionadas.length === 0}
+              onClick={() => void gerarLink(cobreTudo ? undefined : selecionadas.map((p) => p.id))}
+            >
+              {gerandoLink ? "Gerando…" : `Gerar link de pagamento (${money(valorSelecionado)})`}
+            </button>
+          )}
         </div>
+        {linkErro && <div className="notice error-notice" role="alert">{linkErro}</div>}
+        {podeGerarLink && varias && abertas.length > 0 && (
+          <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>
+            Por padrão o link cobre todas as passagens em aberto. Desmarque as que não quer cobrar agora
+            {cobreTudo && lot.taxaCentavos > 0 ? `; a taxa de ${money(lot.taxaCentavos)} vai junto com o link que cobre todas.` : lot.taxaCentavos > 0 ? "; a taxa do lote só entra no link que cobre todas as passagens em aberto." : "."}
+          </p>
+        )}
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
+                {podeGerarLink && varias && <th aria-label="Selecionar para o link"></th>}
+                <th>ID</th>
                 <th>Data e Hora</th>
                 <th>Veículo (Placa)</th>
                 <th>Praça</th>
                 <th>Rodovia</th>
                 <th>Valor do Pedágio</th>
+                <th>Situação</th>
               </tr>
             </thead>
             <tbody>
               {lot.passagens.map((p) => (
                 <tr key={p.id}>
+                  {podeGerarLink && varias && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Incluir a passagem ${p.id} no link`}
+                        disabled={p.statusPagamento === "PAGA" || gerandoLink}
+                        checked={p.statusPagamento !== "PAGA" && !desmarcadas.includes(p.id)}
+                        onChange={(e) => setDesmarcadas((atual) => (e.target.checked ? atual.filter((i) => i !== p.id) : [...atual, p.id]))}
+                      />
+                    </td>
+                  )}
+                  <td className="strong" style={{ fontFamily: "monospace" }}>#{p.id}</td>
                   <td>{new Date(p.dataHora).toLocaleString("pt-BR")}</td>
                   <td>
                     <span className="strong" style={{ fontFamily: "monospace" }}>
@@ -591,11 +684,68 @@ export function LotDetailPage() {
                   <td className="strong">{p.praca}</td>
                   <td>{p.rodovia}</td>
                   <td className="strong">{money(p.valorCentavos)}</td>
+                  <td>{p.statusPagamento === "PAGA" || lot.status === "PAGO" ? "Paga" : "Em aberto"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      </section>
+      <section className="panel" id="links">
+        <div className="panel-head">
+          <div>
+            <h2>Links de pagamento</h2>
+            <p>
+              Cada link cobre uma ou mais passagens do lote. Quando o Coral avisa o pagamento, as passagens do link ficam pagas e, sem passagem em aberto, o lote é baixado e a régua encerra.
+              {lot.valorPagoCentavos > 0 && lot.status !== "PAGO" && ` Já pago por links: ${money(lot.valorPagoCentavos)}; falta ${money(Math.max(0, lot.valorFinalCentavos - lot.valorPagoCentavos))}.`}
+            </p>
+          </div>
+        </div>
+        {lot.links.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Link</th>
+                  <th>Passagens</th>
+                  <th>Valor</th>
+                  <th>Situação</th>
+                  <th>Origem</th>
+                  <th>Criado em</th>
+                  <th>Válido até</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lot.links.map((l) => (
+                  <tr key={l.id}>
+                    <td className="strong">#{l.id}</td>
+                    <td style={{ fontFamily: "monospace" }}>{l.passagens.map((p) => `#${p.passagemId}`).join(", ") || "—"}</td>
+                    <td className="strong">{money(l.valorCentavos)}</td>
+                    <td>{STATUS_LINK[l.status] ?? l.status}{l.pagoEm && ` em ${new Date(l.pagoEm).toLocaleString("pt-BR")}`}</td>
+                    <td>{ORIGEM_LINK[l.origem] ?? l.origem}{l.criadoPor && ` · ${l.criadoPor}`}</td>
+                    <td>{new Date(l.criadoEm).toLocaleString("pt-BR")}</td>
+                    <td>{new Date(l.expiraEm).toLocaleString("pt-BR")}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {l.url && l.status === "ATIVO" && (
+                        <>
+                          <button type="button" className="button secondary" onClick={() => void copiarLink(l.id, l.url)}>
+                            {copiado === l.id ? "Copiado!" : "Copiar"}
+                          </button>{" "}
+                          <a className="button secondary" href={l.url} target="_blank" rel="noreferrer">
+                            Abrir ↗
+                          </a>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="empty">Nenhum link gerado por este painel até o momento.</p>
+        )}
       </section>
     </main>
   );
