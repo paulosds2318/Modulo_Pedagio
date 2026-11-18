@@ -21,6 +21,7 @@ import {
   variation,
   type Period,
 } from "@/lib/painel";
+import { ConfirmLink } from "@/components/confirm-link";
 import { RefreshPageButton } from "@/components/refresh-page-button";
 import { LinkPagination } from "@/components/link-pagination";
 import { TimelineChart } from "@/components/timeline-chart";
@@ -113,9 +114,9 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
         </div>
         <div className="dashboard-heading-actions">
           <RefreshPageButton />
-          <a className="button primary" href={`/api/painel/relatorio?${painelQuery(filters)}`} download>
+          <ConfirmLink className="button primary" href={`/api/painel/relatorio?${painelQuery(filters)}`} mensagem="Exportar o relatório do painel em Excel? A exportação fica registrada na auditoria." download>
             Exportar relatório
-          </a>
+          </ConfirmLink>
         </div>
       </header>
 

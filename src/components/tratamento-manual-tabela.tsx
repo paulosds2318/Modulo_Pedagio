@@ -30,6 +30,9 @@ export function TratamentoManualTabela({ lotes, isAdmin, vazio }: { lotes: LoteM
 
   async function gerar(ids: number[]) {
     if (!ids.length) return;
+    const total = lotes.filter((l) => ids.includes(l.id)).reduce((soma, l) => soma + l.valorCentavos, 0);
+    const texto = ids.length === 1 ? `Gerar o link de pagamento do lote #${ids[0]} (${money(total)})?` : `Gerar ${ids.length} links de pagamento, um por lote, no total de ${money(total)}?`;
+    if (!window.confirm(texto)) return;
     setGerando(true);
     setErro("");
     try {

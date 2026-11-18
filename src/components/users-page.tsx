@@ -100,6 +100,7 @@ export function UsersPage() {
     e.preventDefault();
     setFormError("");
     setFormSuccess("");
+    if (!window.confirm(`Criar o usuário ${name} (${email})?`)) return;
     setSubmitting(true);
 
     try {
@@ -143,6 +144,7 @@ export function UsersPage() {
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
+    if (!window.confirm(`Salvar as alterações do usuário ${editingUser.email ?? editName}?${editPassword.trim() ? " A senha será trocada." : ""}`)) return;
     setEditSubmitting(true);
     setEditError("");
 

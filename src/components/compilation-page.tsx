@@ -103,6 +103,8 @@ export function CompilationPage() {
       if (dias < 0) return setRefreshError("A data inicial precisa ser anterior à final.");
       if (dias > MAX_DIAS_SINCRONIZACAO) return setRefreshError(`O Coral aceita no máximo ${MAX_DIAS_SINCRONIZACAO} dias por consulta.`);
     }
+    const periodo = syncDe ? `de ${syncDe.split("-").reverse().join("/")} a ${syncAte.split("-").reverse().join("/")}` : "dos últimos dias";
+    if (!window.confirm(`Consultar no Coral as passagens ${periodo} e importar as novas?`)) return;
     setSyncing(true);
     setRefreshNotice(syncDe ? `Consultando passagens no Coral de ${syncDe.split("-").reverse().join("/")} a ${syncAte.split("-").reverse().join("/")}...` : "Consultando passagens no Coral (últimos dias)...");
     try {
@@ -130,6 +132,8 @@ export function CompilationPage() {
   async function compile() {
     const feeValue = Number(fee.replace(",", "."));
     if (!selectedList.length || contracts.size !== 1 || !Number.isFinite(feeValue) || feeValue < 0) return;
+    const contrato = selectedList[0].numeroContrato;
+    if (!window.confirm(`Compilar ${selectedList.length} passagem(ns) do contrato ${contrato} em um lote de ${money(finalTotal)} (taxa ${money(feeCentavos)}) e iniciar a régua de cobrança?`)) return;
     setBusy(true);
     setNotice("");
     try {

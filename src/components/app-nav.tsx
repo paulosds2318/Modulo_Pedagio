@@ -39,6 +39,7 @@ export function AppNav() {
     );
   }
   async function handleSignOut() {
+    if (!window.confirm("Deseja sair do sistema?")) return;
     await signOut();
     router.push("/login");
     router.refresh();

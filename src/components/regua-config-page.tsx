@@ -53,6 +53,7 @@ export function ReguaConfigPage() {
     setError("");
     const check = validarPrazos(form);
     if (!check.ok) return setError(check.erro);
+    if (!window.confirm("Salvar os novos prazos da régua? Eles valem para todos os lotes em andamento a partir da próxima execução.")) return;
     setSaving(true);
     try {
       const r = await fetch("/api/configuracoes/regua", {

@@ -169,7 +169,8 @@ export function LotDetailPage() {
     const centavos = reaisParaCentavos(baixa.valor);
     if (centavos === null || centavos <= 0) return setBaixaErro("Informe o valor recebido, por exemplo 13,21.");
     const diferenca = centavos - lot.valorFinalCentavos;
-    if (diferenca !== 0 && !window.confirm(`O valor recebido é ${diferenca < 0 ? "menor" : "maior"} que o devido em ${money(Math.abs(diferenca))}. Confirmar a baixa assim mesmo?`)) return;
+    const aviso = diferenca !== 0 ? ` Atenção: o valor recebido é ${diferenca < 0 ? "menor" : "maior"} que o devido em ${money(Math.abs(diferenca))}.` : "";
+    if (!window.confirm(`Registrar a baixa manual do lote #${lot.id} (${FORMAS_BAIXA_MANUAL[baixa.forma] ?? baixa.forma}, ${money(centavos)})? O lote será marcado como pago e a régua encerrada.${aviso}`)) return;
     setSalvandoBaixa(true);
     try {
       const response = await fetch(`/api/lotes/${params.id}/baixa-manual`, {
@@ -191,6 +192,11 @@ export function LotDetailPage() {
 
   async function gerarLink(passagemIds: number[] | undefined) {
     if (!lot) return;
+    const aberta = lot.passagens.filter((p) => p.statusPagamento !== "PAGA");
+    const escolhidas = passagemIds ? aberta.filter((p) => passagemIds.includes(p.id)) : aberta;
+    const valor = valorDoLink(escolhidas, escolhidas.length === aberta.length, lot.taxaCentavos);
+    const descricao = escolhidas.length === aberta.length ? "todas as passagens em aberto" : `${escolhidas.length} de ${aberta.length} passagens (${escolhidas.map((p) => `#${p.id}`).join(", ")})`;
+    if (!window.confirm(`Gerar um link de pagamento de ${money(valor)} para ${descricao}?`)) return;
     setGerandoLink(true);
     setLinkErro("");
     try {
@@ -285,6 +291,7 @@ export function LotDetailPage() {
   async function queryAdyen() {
     if (!lot) return;
     const previousStatus = lot.status;
+    if (!window.confirm(`Consultar o pagamento do lote #${lot.id} na Adyen? Se estiver pago, o lote será baixado.`)) return;
     setQueryingAdyen(true);
     setError("");
     setQueryMessage("Consultando o pagamento na Adyen...");
@@ -336,6 +343,7 @@ export function LotDetailPage() {
   const cobreTudo = selecionadas.length === abertas.length;
   const valorSelecionado = valorDoLink(selecionadas, cobreTudo, lot.taxaCentavos);
   const varias = lot.passagens.length > 1;
+  const valorTotalAberto = valorDoLink(abertas, true, lot.taxaCentavos);
   const podeDarBaixa = isAdmin && STATUS_PERMITEM_BAIXA.includes(lot.status);
   const inadimplente = lot.status === "INADIMPLENTE";
   const podeCancelar = isAdmin && STATUS_PERMITEM_CANCELAMENTO.includes(lot.status);
@@ -568,10 +576,10 @@ export function LotDetailPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {lot.adyenPaymentUrl && lot.status !== "PAGO" && lot.status !== "CANCELADO" && (
-              <a className="button primary" href={lot.adyenPaymentUrl} target="_blank" rel="noreferrer">
-                {`Abrir link de pagamento (${money(lot.links.find((l) => l.url === lot.adyenPaymentUrl)?.valorCentavos ?? Math.max(0, lot.valorFinalCentavos - lot.valorPagoCentavos))})`}
-              </a>
+            {podeGerarLink && abertas.length > 0 && (
+              <button type="button" className="button primary" disabled={gerandoLink} onClick={() => void gerarLink(undefined)}>
+                {gerandoLink ? "Gerando…" : `Gerar link de pagamento (${money(valorTotalAberto)})`}
+              </button>
             )}
           </div>
         </div>
@@ -628,21 +636,21 @@ export function LotDetailPage() {
               )}
             </p>
           </div>
-          {podeGerarLink && abertas.length > 0 && (
+          {podeGerarLink && varias && abertas.length > 0 && (
             <button
               type="button"
               className="button primary"
               disabled={gerandoLink || selecionadas.length === 0}
-              onClick={() => void gerarLink(cobreTudo ? undefined : selecionadas.map((p) => p.id))}
+              onClick={() => void gerarLink(selecionadas.map((p) => p.id))}
             >
-              {gerandoLink ? "Gerando…" : `Gerar link de pagamento (${money(valorSelecionado)})`}
+              {gerandoLink ? "Gerando…" : `Gerar link das passagens selecionadas (${money(valorSelecionado)})`}
             </button>
           )}
         </div>
         {linkErro && <div className="notice error-notice" role="alert">{linkErro}</div>}
         {podeGerarLink && varias && abertas.length > 0 && (
           <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>
-            Por padrão o link cobre todas as passagens em aberto. Desmarque as que não quer cobrar agora
+            O botão do topo gera o link do valor total. Para cobrar só algumas passagens, marque as que devem ser pagas e use o botão desta seção
             {cobreTudo && lot.taxaCentavos > 0 ? `; a taxa de ${money(lot.taxaCentavos)} vai junto com o link que cobre todas.` : lot.taxaCentavos > 0 ? "; a taxa do lote só entra no link que cobre todas as passagens em aberto." : "."}
           </p>
         )}
