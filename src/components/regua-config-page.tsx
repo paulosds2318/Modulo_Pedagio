@@ -3,6 +3,7 @@
 import { BackToHome } from "@/components/back-to-home";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
+import { useConfirm } from "@/components/confirm-provider";
 import { useSession } from "@/lib/auth-client";
 import { MAX_DIAS_REGUA, MAX_HORAS_LINK, ROTULOS, validarPrazos, type PrazosRegua } from "@/lib/regua-config";
 
@@ -21,6 +22,7 @@ const CAMPOS: Array<{ campo: CampoDias; descricao: string }> = [
 ];
 
 export function ReguaConfigPage() {
+  const confirmar = useConfirm();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const isAdmin = role === "admin" || role === "master";
@@ -53,7 +55,7 @@ export function ReguaConfigPage() {
     setError("");
     const check = validarPrazos(form);
     if (!check.ok) return setError(check.erro);
-    if (!window.confirm("Salvar os novos prazos da régua? Eles valem para todos os lotes em andamento a partir da próxima execução.")) return;
+    if (!(await confirmar({ titulo: "Salvar os prazos da régua", mensagem: "Os novos prazos valem para todos os lotes em andamento, a partir da próxima execução da rotina.", confirmarTexto: "Salvar prazos" }))) return;
     setSaving(true);
     try {
       const r = await fetch("/api/configuracoes/regua", {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppNav } from "@/components/app-nav";
+import { ConfirmProvider } from "@/components/confirm-provider";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -26,8 +27,10 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <AppNav />
-        {children}
+        <ConfirmProvider>
+          <AppNav />
+          {children}
+        </ConfirmProvider>
       </body>
     </html>
   );

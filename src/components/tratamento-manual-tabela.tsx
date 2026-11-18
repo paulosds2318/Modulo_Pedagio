@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { useConfirm } from "@/components/confirm-provider";
 
 export type LoteManual = {
   id: number;
@@ -20,6 +21,7 @@ const money = (c: number) => new Intl.NumberFormat("pt-BR", { style: "currency",
 
 /** Lotes em tratamento manual: gera links de pagamento por lote ou em lote (somente administradores). */
 export function TratamentoManualTabela({ lotes, isAdmin, vazio }: { lotes: LoteManual[]; isAdmin: boolean; vazio: string }) {
+  const confirmar = useConfirm();
   const [marcados, setMarcados] = useState<number[]>([]);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
@@ -31,8 +33,14 @@ export function TratamentoManualTabela({ lotes, isAdmin, vazio }: { lotes: LoteM
   async function gerar(ids: number[]) {
     if (!ids.length) return;
     const total = lotes.filter((l) => ids.includes(l.id)).reduce((soma, l) => soma + l.valorCentavos, 0);
-    const texto = ids.length === 1 ? `Gerar o link de pagamento do lote #${ids[0]} (${money(total)})?` : `Gerar ${ids.length} links de pagamento, um por lote, no total de ${money(total)}?`;
-    if (!window.confirm(texto)) return;
+    const um = ids.length === 1;
+    const ok = await confirmar({
+      titulo: um ? "Gerar link de pagamento" : "Gerar links de pagamento",
+      mensagem: um ? "O link cobre todas as passagens em aberto do lote." : "Cada lote recebe um link com todas as passagens em aberto.",
+      itens: [{ rotulo: um ? "Lote" : "Lotes", valor: um ? `#${ids[0]}` : String(ids.length) }, { rotulo: "Valor total", valor: money(total) }],
+      confirmarTexto: um ? "Gerar link" : `Gerar ${ids.length} links`,
+    });
+    if (!ok) return;
     setGerando(true);
     setErro("");
     try {

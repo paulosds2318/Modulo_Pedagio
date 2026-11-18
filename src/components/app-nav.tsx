@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useSession, signOut } from "@/lib/auth-client";
+import { useConfirm } from "@/components/confirm-provider";
 
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const confirmar = useConfirm();
   const { data: session, isPending } = useSession();
 
   const user = session?.user;
@@ -39,7 +41,7 @@ export function AppNav() {
     );
   }
   async function handleSignOut() {
-    if (!window.confirm("Deseja sair do sistema?")) return;
+    if (!(await confirmar({ titulo: "Sair do sistema?", mensagem: "Você precisará entrar novamente para continuar.", confirmarTexto: "Sair" }))) return;
     await signOut();
     router.push("/login");
     router.refresh();

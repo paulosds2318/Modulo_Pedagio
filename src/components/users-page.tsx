@@ -2,6 +2,7 @@
 
 import { BackToHome } from "@/components/back-to-home";
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/confirm-provider";
 import { useSession } from "@/lib/auth-client";
 import Link from "next/link";
 
@@ -14,6 +15,7 @@ type UserItem = {
 };
 
 export function UsersPage() {
+  const confirmar = useConfirm();
   const { data: session, isPending } = useSession();
   const currentUserId = session?.user?.id;
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
@@ -100,7 +102,7 @@ export function UsersPage() {
     e.preventDefault();
     setFormError("");
     setFormSuccess("");
-    if (!window.confirm(`Criar o usuário ${name} (${email})?`)) return;
+    if (!(await confirmar({ titulo: "Criar usuário", mensagem: "A pessoa poderá entrar com o e-mail e a senha informados.", itens: [{ rotulo: "Nome", valor: name }, { rotulo: "E-mail", valor: email }], confirmarTexto: "Criar usuário" }))) return;
     setSubmitting(true);
 
     try {
@@ -144,7 +146,7 @@ export function UsersPage() {
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
-    if (!window.confirm(`Salvar as alterações do usuário ${editingUser.email ?? editName}?${editPassword.trim() ? " A senha será trocada." : ""}`)) return;
+    if (!(await confirmar({ titulo: "Salvar alterações do usuário", itens: [{ rotulo: "Usuário", valor: editName || (editingUser.email ?? "") }], aviso: editPassword.trim() ? "A senha deste usuário será trocada." : undefined, confirmarTexto: "Salvar" }))) return;
     setEditSubmitting(true);
     setEditError("");
 
@@ -175,13 +177,21 @@ export function UsersPage() {
 
   async function handleDelete(u: UserItem) {
     if (u.id === currentUserId) {
-      alert("Por segurança, você não pode excluir o seu próprio usuário logado.");
+      await confirmar({ titulo: "Não é possível excluir", mensagem: "Por segurança, você não pode excluir o seu próprio usuário logado.", semCancelar: true });
       return;
     }
 
-    const confirmDelete = window.confirm(
-      `Deseja realmente excluir o acesso do usuário "${u.name}" (${u.email})?\nEsta ação não poderá ser desfeita.`
-    );
+    const confirmDelete = await confirmar({
+      titulo: "Excluir o acesso do usuário",
+      mensagem: "Esta ação não poderá ser desfeita.",
+      itens: [
+        { rotulo: "Nome", valor: u.name },
+        { rotulo: "E-mail", valor: u.email },
+      ],
+      confirmarTexto: "Excluir acesso",
+      cancelarTexto: "Voltar",
+      tom: "perigo",
+    });
     if (!confirmDelete) return;
 
     setDeletingId(u.id);
@@ -197,7 +207,7 @@ export function UsersPage() {
 
       loadUsers();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao excluir.");
+      await confirmar({ titulo: "Não foi possível excluir", mensagem: e instanceof Error ? e.message : "Erro ao excluir.", semCancelar: true });
     } finally {
       setDeletingId(null);
     }

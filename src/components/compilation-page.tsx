@@ -3,6 +3,7 @@
 import { BackToHome } from "@/components/back-to-home";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/confirm-provider";
 import { useSession } from "@/lib/auth-client";
 
 type Passage = {
@@ -34,6 +35,7 @@ async function fetchPendentes(page: number, search: string, de: string, ate: str
 }
 
 export function CompilationPage() {
+  const confirmar = useConfirm();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role || "viewer";
   const isViewer = !session?.user || (role !== "admin" && role !== "master");
@@ -104,7 +106,7 @@ export function CompilationPage() {
       if (dias > MAX_DIAS_SINCRONIZACAO) return setRefreshError(`O Coral aceita no máximo ${MAX_DIAS_SINCRONIZACAO} dias por consulta.`);
     }
     const periodo = syncDe ? `de ${syncDe.split("-").reverse().join("/")} a ${syncAte.split("-").reverse().join("/")}` : "dos últimos dias";
-    if (!window.confirm(`Consultar no Coral as passagens ${periodo} e importar as novas?`)) return;
+    if (!(await confirmar({ titulo: "Consultar passagens no Coral", mensagem: "As passagens novas serão importadas e ficam disponíveis para compilar.", itens: [{ rotulo: "Período", valor: periodo }], confirmarTexto: "Consultar" }))) return;
     setSyncing(true);
     setRefreshNotice(syncDe ? `Consultando passagens no Coral de ${syncDe.split("-").reverse().join("/")} a ${syncAte.split("-").reverse().join("/")}...` : "Consultando passagens no Coral (últimos dias)...");
     try {
@@ -133,7 +135,7 @@ export function CompilationPage() {
     const feeValue = Number(fee.replace(",", "."));
     if (!selectedList.length || contracts.size !== 1 || !Number.isFinite(feeValue) || feeValue < 0) return;
     const contrato = selectedList[0].numeroContrato;
-    if (!window.confirm(`Compilar ${selectedList.length} passagem(ns) do contrato ${contrato} em um lote de ${money(finalTotal)} (taxa ${money(feeCentavos)}) e iniciar a régua de cobrança?`)) return;
+    if (!(await confirmar({ titulo: "Compilar lote de cobrança", mensagem: "A régua de cobrança é iniciada e o link de pagamento é gerado.", itens: [{ rotulo: "Contrato", valor: contrato }, { rotulo: "Passagens", valor: String(selectedList.length) }, { rotulo: "Pedágios", valor: money(total) }, { rotulo: "Taxa", valor: money(feeCentavos) }, { rotulo: "Valor do lote", valor: money(finalTotal) }], confirmarTexto: "Compilar lote" }))) return;
     setBusy(true);
     setNotice("");
     try {

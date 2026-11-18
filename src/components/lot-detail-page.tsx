@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "@/lib/auth-client";
+import { useConfirm } from "@/components/confirm-provider";
 import { FORMAS_BAIXA_MANUAL, FORMAS_PAGAMENTO, STATUS_PERMITEM_BAIXA, reaisParaCentavos } from "@/lib/baixa-manual";
 import { MOTIVOS_CANCELAMENTO, STATUS_PERMITEM_CANCELAMENTO } from "@/lib/cancelamento";
 import { formatCpf, formatPhone } from "@/lib/pii";
@@ -85,6 +86,7 @@ const buildStages = (prazos: PrazosRegua) => [
 export function LotDetailPage() {
   const params = useParams<{ id: string }>();
   const { data: session } = useSession();
+  const confirmar = useConfirm();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const isAdmin = role === "admin" || role === "master";
   const [baixaAberta, setBaixaAberta] = useState(false);
@@ -169,8 +171,19 @@ export function LotDetailPage() {
     const centavos = reaisParaCentavos(baixa.valor);
     if (centavos === null || centavos <= 0) return setBaixaErro("Informe o valor recebido, por exemplo 13,21.");
     const diferenca = centavos - lot.valorFinalCentavos;
-    const aviso = diferenca !== 0 ? ` Atenção: o valor recebido é ${diferenca < 0 ? "menor" : "maior"} que o devido em ${money(Math.abs(diferenca))}.` : "";
-    if (!window.confirm(`Registrar a baixa manual do lote #${lot.id} (${FORMAS_BAIXA_MANUAL[baixa.forma] ?? baixa.forma}, ${money(centavos)})? O lote será marcado como pago e a régua encerrada.${aviso}`)) return;
+    const ok = await confirmar({
+      titulo: "Registrar baixa manual",
+      mensagem: "O lote será marcado como pago e a régua de cobrança será encerrada.",
+      itens: [
+        { rotulo: "Lote", valor: `#${lot.id} · ${lot.numeroContrato}` },
+        { rotulo: "Forma de pagamento", valor: FORMAS_BAIXA_MANUAL[baixa.forma] ?? baixa.forma },
+        { rotulo: "Valor devido", valor: money(lot.valorFinalCentavos) },
+        { rotulo: "Valor recebido", valor: money(centavos) },
+      ],
+      aviso: diferenca !== 0 ? `O valor recebido é ${diferenca < 0 ? "menor" : "maior"} que o devido em ${money(Math.abs(diferenca))}.` : undefined,
+      confirmarTexto: "Registrar baixa",
+    });
+    if (!ok) return;
     setSalvandoBaixa(true);
     try {
       const response = await fetch(`/api/lotes/${params.id}/baixa-manual`, {
@@ -196,7 +209,17 @@ export function LotDetailPage() {
     const escolhidas = passagemIds ? aberta.filter((p) => passagemIds.includes(p.id)) : aberta;
     const valor = valorDoLink(escolhidas, escolhidas.length === aberta.length, lot.taxaCentavos);
     const descricao = escolhidas.length === aberta.length ? "todas as passagens em aberto" : `${escolhidas.length} de ${aberta.length} passagens (${escolhidas.map((p) => `#${p.id}`).join(", ")})`;
-    if (!window.confirm(`Gerar um link de pagamento de ${money(valor)} para ${descricao}?`)) return;
+    const ok = await confirmar({
+      titulo: "Gerar link de pagamento",
+      mensagem: "O link é criado no Coral e fica registrado no histórico do lote.",
+      itens: [
+        { rotulo: "Lote", valor: `#${lot.id} · ${lot.numeroContrato}` },
+        { rotulo: "Passagens", valor: descricao },
+        { rotulo: "Valor do link", valor: money(valor) },
+      ],
+      confirmarTexto: "Gerar link",
+    });
+    if (!ok) return;
     setGerandoLink(true);
     setLinkErro("");
     try {
@@ -240,7 +263,18 @@ export function LotDetailPage() {
     if (!lot) return;
     setCancelErro("");
     if (cancelamento.observacao.trim().length < 5) return setCancelErro("Explique o cancelamento na observação.");
-    if (!window.confirm(`Cancelar o lote #${lot.id} (${money(lot.valorFinalCentavos)})? A régua de cobrança será encerrada e o lote não poderá ser reativado.`)) return;
+    const ok = await confirmar({
+      titulo: "Cancelar o lote",
+      mensagem: "A régua de cobrança será encerrada e o lote não poderá ser reativado.",
+      itens: [
+        { rotulo: "Lote", valor: `#${lot.id} · ${lot.numeroContrato}` },
+        { rotulo: "Valor", valor: money(lot.valorFinalCentavos) },
+      ],
+      confirmarTexto: "Cancelar lote",
+      cancelarTexto: "Voltar",
+      tom: "perigo",
+    });
+    if (!ok) return;
     setCancelando(true);
     try {
       const response = await fetch(`/api/lotes/${params.id}/cancelar`, {
@@ -291,7 +325,7 @@ export function LotDetailPage() {
   async function queryAdyen() {
     if (!lot) return;
     const previousStatus = lot.status;
-    if (!window.confirm(`Consultar o pagamento do lote #${lot.id} na Adyen? Se estiver pago, o lote será baixado.`)) return;
+    if (!(await confirmar({ titulo: "Consultar pagamento na Adyen", mensagem: "Se a Adyen informar que o link foi pago, o lote será baixado.", itens: [{ rotulo: "Lote", valor: `#${lot.id} · ${lot.numeroContrato}` }], confirmarTexto: "Consultar" }))) return;
     setQueryingAdyen(true);
     setError("");
     setQueryMessage("Consultando o pagamento na Adyen...");

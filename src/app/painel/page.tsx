@@ -114,7 +114,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
         </div>
         <div className="dashboard-heading-actions">
           <RefreshPageButton />
-          <ConfirmLink className="button primary" href={`/api/painel/relatorio?${painelQuery(filters)}`} mensagem="Exportar o relatório do painel em Excel? A exportação fica registrada na auditoria." download>
+          <ConfirmLink className="button primary" href={`/api/painel/relatorio?${painelQuery(filters)}`} titulo="Exportar relatório do painel" mensagem="O relatório em Excel será baixado com os filtros atuais. A exportação fica registrada na auditoria." confirmarTexto="Exportar" download>
             Exportar relatório
           </ConfirmLink>
         </div>
