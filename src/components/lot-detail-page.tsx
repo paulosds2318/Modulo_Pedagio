@@ -570,7 +570,7 @@ export function LotDetailPage() {
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {lot.adyenPaymentUrl && lot.status !== "PAGO" && lot.status !== "CANCELADO" && (
               <a className="button primary" href={lot.adyenPaymentUrl} target="_blank" rel="noreferrer">
-                Abrir Link Adyen (Pay-by-Link) ↗
+                {`Abrir link de pagamento (${money(lot.links.find((l) => l.url === lot.adyenPaymentUrl)?.valorCentavos ?? Math.max(0, lot.valorFinalCentavos - lot.valorPagoCentavos))})`}
               </a>
             )}
           </div>
