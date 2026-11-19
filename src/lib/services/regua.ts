@@ -161,10 +161,26 @@ async function comunicar(loteId: number, etapa: string, template: "AVISO_DEBITO"
   if (lote) await notificarCliente(lote, template, etapa);
 }
 
+const LOTES_POR_BLOCO = 200;
+
 export async function processBillingRule(now = new Date()) {
   const prazos = await obterPrazosRegua();
-  const open = await db.loteCobranca.findMany({ where: { status: "EM_REGUA" }, orderBy: { dataCriacao: "asc" } });
   let processed = 0;
+  let encontrados = 0;
+  // Lotes mais novos que o primeiro prazo não têm nada a fazer. Os demais vêm em blocos, por ID, para o volume
+  // de lotes não pesar na memória nem deixar lotes de fora.
+  const limiar = new Date(now.getTime() - prazos.diasPrimeiraTentativa * DAY);
+  let cursor = 0;
+
+  for (;;) {
+    const open = await db.loteCobranca.findMany({
+      where: { status: "EM_REGUA", id: { gt: cursor }, dataCriacao: { lte: limiar } },
+      orderBy: { id: "asc" },
+      take: LOTES_POR_BLOCO,
+    });
+    if (!open.length) break;
+    cursor = open[open.length - 1].id;
+    encontrados += open.length;
 
   for (const item of open) {
     // Trava de concorrência (5 minutos) para não processar o mesmo lote duas vezes ao mesmo tempo.
@@ -235,6 +251,7 @@ export async function processBillingRule(now = new Date()) {
       await db.loteCobranca.updateMany({ where: { id: item.id }, data: { processandoAte: null } });
     }
   }
+  }
 
-  return { encontrados: open.length, processados: processed };
+  return { encontrados, processados: processed };
 }

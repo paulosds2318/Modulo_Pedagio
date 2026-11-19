@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   try {
     if (!paginado) {
-      return NextResponse.json(await db.passagemPedagio.findMany({ where, orderBy: { dataHora: "desc" } }));
+      return NextResponse.json(await db.passagemPedagio.findMany({ where, orderBy: { dataHora: "desc" }, take: 1000 }));
     }
     const pageValue = Number.parseInt(params.get("page") || "1", 10);
     const limitValue = Number.parseInt(params.get("limit") || "50", 10);

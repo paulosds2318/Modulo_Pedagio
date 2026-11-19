@@ -1,3 +1,4 @@
+import type { LinkPagamento } from "@prisma/client";
 import { db } from "@/lib/db";
 import { loginToCoral, limparTokenCoral } from "@/lib/services/coral-pay-by-link";
 import { aplicarPagamentoLink, aplicarPagamentoLoteLegado } from "@/lib/services/links-pagamento";
@@ -5,8 +6,12 @@ import { STATUS_LOTE_COBRAVEL, referenciaDoLink } from "@/lib/links-pagamento";
 import { lerRespostaStatus, reguaExecutadaPeloCoral, type ItemStatusCoral, type ReguaCoral } from "@/lib/status-coral";
 
 const POR_CHAMADA = 50;
-const MAX_LINKS = 200;
-const MAX_LEGADOS = 100;
+const POR_BLOCO = 200;
+/** Teto por execução: a rotina roda de hora em hora, o restante entra na rodada seguinte. */
+const MAX_ATIVOS = 5000;
+const MAX_EXPIRADOS = 500;
+const MAX_LEGADOS = 200;
+const REGUA_DESATUALIZADA_MS = 30 * 60_000;
 
 /** URL da consulta de pagamento e de régua do Coral (CORAL_PAYMENT_STATUS_URL). Sem ela, a consulta fica desligada. */
 export function urlStatusCoral(): string | null {
@@ -54,11 +59,9 @@ async function aplicarReguaCoral(loteId: number, regua: ReguaCoral): Promise<boo
   const lote = await db.loteCobranca.findUnique({ where: { id: loteId } });
   if (!lote) return false;
   const dados = JSON.stringify(regua);
-  const data: Record<string, unknown> = {};
-  if (lote.coralReguaDados !== dados) {
-    data.coralReguaDados = dados;
-    data.coralStatusEm = new Date();
-  }
+  const data: Record<string, unknown> = { coralStatusEm: new Date() };
+  const mudou = lote.coralReguaDados !== dados;
+  if (mudou) data.coralReguaDados = dados;
   const agora = new Date();
   let log: { acao: string; resultado: string; detalhe: string } | null = null;
 
@@ -74,10 +77,9 @@ async function aplicarReguaCoral(loteId: number, regua: ReguaCoral): Promise<boo
       log = { acao: "ENCERRAR_REGUA", resultado: "INADIMPLENTE", detalhe: "Régua encerrada no Coral sem pagamento (cobrança extrajudicial). Lote encaminhado para tratamento manual." };
     }
   }
-  if (!Object.keys(data).length) return false;
   await db.loteCobranca.update({ where: { id: loteId }, data });
   if (log) await db.logRegua.create({ data: { loteId, etapa: (data.etapaRegua as string | undefined) ?? lote.etapaRegua, acao: log.acao, canal: "Coral", resultado: log.resultado, detalhesResposta: log.detalhe } });
-  return true;
+  return mudou || Boolean(log);
 }
 
 export type ResumoConsulta = {
@@ -98,11 +100,32 @@ export async function sincronizarPagamentosCoral(opcoes: { loteId?: number } = {
   const resumo: ResumoConsulta = { configurado: Boolean(urlStatusCoral()), consultados: 0, pagos: 0, parciais: 0, expirados: 0, alertas: 0, reguaAtualizada: 0 };
   if (!resumo.configurado) return resumo;
 
-  const links = await db.linkPagamento.findMany({
-    where: { status: { in: ["ATIVO", "EXPIRADO"] }, lote: { status: { in: STATUS_LOTE_COBRAVEL } }, ...(opcoes.loteId ? { loteId: opcoes.loteId } : {}) },
-    orderBy: { criadoEm: "asc" },
-    take: MAX_LINKS,
+  // Todos os links ativos (é neles que o pagamento pode chegar), em blocos por ID.
+  const links: LinkPagamento[] = [];
+  let cursor = 0;
+  while (links.length < MAX_ATIVOS) {
+    const bloco = await db.linkPagamento.findMany({
+      where: { status: "ATIVO", id: { gt: cursor }, lote: { status: { in: STATUS_LOTE_COBRAVEL } }, ...(opcoes.loteId ? { loteId: opcoes.loteId } : {}) },
+      orderBy: { id: "asc" },
+      take: POR_BLOCO,
+    });
+    if (!bloco.length) break;
+    links.push(...bloco);
+    cursor = bloco[bloco.length - 1].id;
+  }
+  // Lotes sem link ativo: só o link mais recente e só quando a situação da régua está desatualizada (nunca consultada ou há 30+ min).
+  const semAtivo = await db.loteCobranca.findMany({
+    where: {
+      status: { in: STATUS_LOTE_COBRAVEL },
+      links: { none: { status: "ATIVO" }, some: { status: "EXPIRADO" } },
+      OR: [{ coralStatusEm: null }, { coralStatusEm: { lt: new Date(Date.now() - REGUA_DESATUALIZADA_MS) } }],
+      ...(opcoes.loteId ? { id: opcoes.loteId } : {}),
+    },
+    select: { links: { where: { status: "EXPIRADO" }, orderBy: { criadoEm: "desc" }, take: 1 } },
+    orderBy: { id: "asc" },
+    take: MAX_EXPIRADOS,
   });
+  links.push(...semAtivo.flatMap((l) => l.links));
   // Lotes com link criado antes dos links por passagem: a referência enviada ao Coral foi LOTE_<id>.
   const legados = await db.loteCobranca.findMany({
     where: { status: { in: STATUS_LOTE_COBRAVEL }, adyenPaymentUrl: { not: null }, links: { none: {} }, ...(opcoes.loteId ? { id: opcoes.loteId } : {}) },
