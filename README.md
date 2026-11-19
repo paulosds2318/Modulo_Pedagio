@@ -71,11 +71,19 @@ Cada link é gravado com as passagens que cobre e é enviado ao Coral com a refe
   todas as passagens em aberto, ou só as de `passagemIds`; só com `passagemIds` descobre o lote pelas passagens.
 - `POST /api/links/lote` (administradores, sessão): `{ "loteIds": [...] }` (até 50). Um link por lote, com o resultado de cada
   um (uma falha não impede os demais).
-- `POST /api/webhooks/pagamento` (Bearer `PAGAMENTO_WEBHOOK_TOKEN`): retorno de pagamento do Coral para a baixa automática.
+- **Consulta ao Coral (baixa automática):** o Coral recebe o aviso de pagamento da Adyen e o módulo consulta o Coral
+  (`CORAL_PAYMENT_STATUS_URL`) na rotina agendada, antes de a régua agir, e sob demanda no botão de consultar do lote
+  (`POST /api/lotes/[id]/consultar-pagamento`). Contrato provisório (o pedido ao time de TI do Coral):
+  `GET …?references=LINK_<id>,LOTE_<id>` -> `{ data: [{ reference, status: "PAID" | "PENDING" | "EXPIRED" | "REFUSED", valorCentavos | amount, paidAt,
+  paymentMethod, transactionId, updatedAt, regua: { etapa: "D+2", proximaEtapa, proximaEm, encerradaMotivo: "pago" | "extrajudicial" | "cancelado",
+  comunicacoes: [{ etapa, template, canal, enviadoEm, entrega }], debito: { resultado, em } } }] }`. Idempotente. Com valor diferente do link não
+  baixa (alerta de divergência). Link pago que cobre só parte das passagens abate o lote e a régua segue com o restante; sem passagem em
+  aberto, o lote é baixado e a régua encerra. Pagamento duplicado (lote já pago ou cancelado) gera alerta de estorno. Com a consulta ligada, a
+  régua do módulo confirma no Coral que o link não foi pago antes de debitar o cartão e, sem conseguir confirmar, adia o débito.
+- **Régua executada pelo Coral:** com `REGUA_EXECUTOR=coral` o módulo só acompanha e exibe a situação da régua informada pelo Coral (seção "Régua no
+  Coral" no detalhe do lote); a etapa e o encerramento por cobrança extrajudicial passam a valer no lote e alimentam o painel e o tratamento manual.
+- `POST /api/webhooks/pagamento` (Bearer `PAGAMENTO_WEBHOOK_TOKEN`): rota opcional, caso o Coral prefira avisar o módulo em vez de ser consultado.
   Corpo: `{ "reference": "LINK_<id>", "status": "PAID" | "EXPIRED" | "REFUSED", "valorCentavos" | "amount", "paidAt", "paymentMethod", "transactionId" }`.
-  Idempotente. Com valor diferente do link não baixa (alerta de divergência). Link pago que cobre só parte das passagens abate o
-  lote e a régua segue com o restante; sem passagem em aberto, o lote é baixado e a régua encerra. Pagamento duplicado (lote já
-  pago ou cancelado) gera alerta de estorno. Esse é o contrato pedido ao time de TI do Coral e pode mudar quando eles responderem.
 
 ## Configuração
 

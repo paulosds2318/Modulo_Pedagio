@@ -2,6 +2,7 @@ import { gerarLinkPagamento } from "@/lib/services/links-pagamento";
 import { db } from "@/lib/db";
 import { notificarCliente } from "@/lib/services/notificacoes";
 import { retryAt } from "@/lib/retry";
+import { reguaExecutadaPeloCoral } from "@/lib/status-coral";
 
 const MAX_ATTEMPTS = 10;
 const LEASE_MS = 10 * 60_000;
@@ -49,7 +50,11 @@ export async function processIntegrationOutbox(now = new Date(), loteId?: number
       } else if (job.tipo === "WHATSAPP_D0") {
         // Template 1 (cobrança inicial) só depois que o link existe; sem link, a tarefa é repetida.
         if (!lot.adyenPaymentUrl) throw new Error("Link de pagamento ainda não gerado; a cobrança inicial será enviada depois.");
-        await notificarCliente(lot, "COBRANCA_INICIAL", "D0");
+        if (reguaExecutadaPeloCoral()) {
+          await db.logRegua.create({ data: { loteId: lot.id, etapa: "D0", acao: "COMUNICACAO_CORAL", canal: "Coral", resultado: "DELEGADO", detalhesResposta: "Cobrança inicial (template 1) a cargo do Coral, que executa a régua." } });
+        } else {
+          await notificarCliente(lot, "COBRANCA_INICIAL", "D0");
+        }
       } else {
         throw new Error("Tipo de tarefa de integração desconhecido.");
       }

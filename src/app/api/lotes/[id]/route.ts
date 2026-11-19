@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession, hasRole } from "@/lib/auth";
 import { consultarContatoCliente } from "@/lib/services/coral-pay-by-link";
+import { reguaExecutadaPeloCoral } from "@/lib/status-coral";
 
 export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
@@ -37,6 +38,7 @@ export async function GET(_request: Request, context: RouteContext) {
       }
     }
     const isAdmin = hasRole(session, "admin");
+    if (lot) Object.assign(lot, { reguaExecutor: reguaExecutadaPeloCoral() ? "coral" : "modulo" });
     return lot
       // Nome, CPF e telefone completos para todos os perfis (os analistas já os veem no Coral);
       // apenas o detalhe técnico das integrações fica restrito a administradores.

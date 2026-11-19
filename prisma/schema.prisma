@@ -74,6 +74,9 @@ model LoteCobranca {
   linkExpiraEm           DateTime?
   /// Soma já recebida por links que cobriram só parte das passagens (o débito e os novos links cobram o restante).
   valorPagoCentavos      Int                 @default(0)
+  /// Situação da régua informada pelo Coral (JSON: etapa, comunicações, débito, próxima etapa) e quando foi consultada.
+  coralReguaDados        String?
+  coralStatusEm          DateTime?
   baixaManual            Boolean             @default(false)
   baixaObservacao        String?
   baixaPor               String?

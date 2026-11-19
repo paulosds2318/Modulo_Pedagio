@@ -8,6 +8,7 @@ export const ACOES_AUDITORIA: Record<string, string> = {
   GERAR_LINK_PAGAMENTO: "Gerou link de pagamento (lote, contrato ou passagens)",
   GERAR_LINKS_EM_LOTE: "Gerou links de pagamento em lote",
   CONSULTAR_ADYEN: "Consultou status na Adyen",
+  CONSULTAR_PAGAMENTO_CORAL: "Consultou o pagamento do lote no Coral",
   SINCRONIZAR_CORAL: "Sincronizou passagens com o Coral",
   EXPORTAR_RELATORIO: "Exportou relatório do painel",
   ALTERAR_PRAZOS_REGUA: "Alterou os prazos da régua",

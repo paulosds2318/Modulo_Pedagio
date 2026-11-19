@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { processBillingRule } from "@/lib/services/regua";
 import { processIntegrationOutbox } from "@/lib/services/outbox";
 import { sincronizarPassagensCoral, tollDataUrl } from "@/lib/services/coral-toll-data";
+import { sincronizarPagamentosCoral, urlStatusCoral } from "@/lib/services/consultar-pagamentos";
+import { reguaExecutadaPeloCoral } from "@/lib/status-coral";
 
 /** AGENDADOR: agendador interno do próprio módulo. CRON_EXTERNO: chamada a /api/cron/regua (cron-job.org, EventBridge…). */
 export type OrigemRotina = "AGENDADOR" | "CRON_EXTERNO";
@@ -33,6 +35,16 @@ async function sincronizar() {
   }
 }
 
+/** Pagamentos e situação da régua no Coral. Roda antes da régua: lote pago pelo link não pode ser debitado. */
+async function consultarPagamentos() {
+  if (!urlStatusCoral()) return { status: "NAO_CONFIGURADO" as const };
+  try {
+    return { status: "OK" as const, ...(await sincronizarPagamentosCoral()) };
+  } catch (error) {
+    return { status: "FALHA" as const, erro: error instanceof Error ? error.message.replace(/^CONFIG:\s*/, "") : "Falha desconhecida." };
+  }
+}
+
 /**
  * Rotina automática: busca passagens no Coral, avança a régua (tentativas no cartão, lembrete, inadimplência)
  * e repete as integrações que falharam. Pode rodar várias vezes ao dia: cada etapa acontece uma vez por lote.
@@ -44,17 +56,23 @@ export async function executarRotina(origem: OrigemRotina, now = new Date()) {
   const execucao = await db.execucaoRotina.create({ data: { origem, status: "EM_ANDAMENTO" } });
   try {
     const passagens = await sincronizar();
-    const [regua, integracoes] = await Promise.all([processBillingRule(), processIntegrationOutbox()]);
+    const pagamentos = await consultarPagamentos();
+    // Régua executada pelo Coral: o módulo só acompanha (a situação vem na consulta de pagamentos).
+    const [regua, integracoes] = await Promise.all([
+      reguaExecutadaPeloCoral() ? Promise.resolve({ executor: "coral" as const }) : processBillingRule(),
+      processIntegrationOutbox(),
+    ]);
     const resumo = {
       passagens: { status: passagens.status, recebidas: "recebidas" in passagens ? passagens.recebidas : 0, importadas: "importadas" in passagens ? passagens.importadas : 0 },
+      pagamentos,
       regua,
       integracoes,
     };
     await db.execucaoRotina.update({
       where: { id: execucao.id },
-      data: { status: passagens.status === "FALHA" ? "PARCIAL" : "OK", finalizadoEm: new Date(), resumo: JSON.stringify(resumo), erro: passagens.status === "FALHA" ? `Sincronização com o Coral: ${passagens.erro}` : null },
+      data: { status: passagens.status === "FALHA" || pagamentos.status === "FALHA" ? "PARCIAL" : "OK", finalizadoEm: new Date(), resumo: JSON.stringify(resumo), erro: [passagens.status === "FALHA" ? `Sincronização com o Coral: ${passagens.erro}` : null, pagamentos.status === "FALHA" ? `Consulta de pagamentos no Coral: ${pagamentos.erro}` : null].filter(Boolean).join(" · ") || null },
     });
-    return { status: "OK" as const, passagens, regua, integracoes };
+    return { status: "OK" as const, passagens, pagamentos, regua, integracoes };
   } catch (error) {
     const mensagem = error instanceof Error ? error.message : "Falha desconhecida.";
     await db.execucaoRotina

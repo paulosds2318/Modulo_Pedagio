@@ -59,7 +59,9 @@ A resposta deve seguir o mesmo contrato de `POST /api/passagens` (os 10 campos o
 | Variável | O que configura | Quando usar |
 |---|---|---|
 | **CORAL_WALLET_ENCODE** | Chave de criptografia (AES-256) do payload do débito no cartão salvo, pelo Coral (`/wallet-payment`). | Obrigatória para o débito automático do D+2 e do D+7; sem ela o débito não é tentado e a régua segue. Pedir ao time do Coral; use o valor do ambiente certo (homologação ou produção). Nunca publique. |
-| **PAGAMENTO_WEBHOOK_TOKEN** | Segredo Bearer que autentica o retorno de pagamento do Coral em `POST /api/webhooks/pagamento` (baixa automática). | Obrigatório para a baixa automática; sem ele o webhook responde 503. Gere um valor longo e aleatório e informe ao time do Coral por canal seguro. |
+| **CORAL_PAYMENT_STATUS_URL** | URL da consulta de pagamento e de situação da régua no Coral (`GET …?references=LINK_1,LINK_2`). O módulo consulta de forma agendada e sob demanda no lote. | Sem ela a consulta fica desligada e a baixa pelo link só acontece por baixa manual. Fora de produção só aceita endereço de homologação. Contrato provisório: ver README. |
+| **REGUA_EXECUTOR** | Quem executa a régua de cobrança: `modulo` (padrão) ou `coral`. | Com `coral` o módulo não envia comunicações, não debita nem gera links novos pela régua: só acompanha e exibe a etapa informada pelo Coral. Mude somente quando o Coral confirmar que assumiu a régua. |
+| **PAGAMENTO_WEBHOOK_TOKEN** | Segredo Bearer da rota opcional `POST /api/webhooks/pagamento`, para o caso de o Coral preferir avisar o módulo. | Opcional. O fluxo principal é o módulo consultar o Coral (`CORAL_PAYMENT_STATUS_URL`). Sem o token, a rota responde 503. |
 
 ## WhatsApp
 

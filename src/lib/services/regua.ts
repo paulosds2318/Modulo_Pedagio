@@ -1,4 +1,5 @@
 import { valorEmAberto } from "@/lib/links-pagamento";
+import { sincronizarPagamentosCoral, urlStatusCoral } from "@/lib/services/consultar-pagamentos";
 import { db } from "@/lib/db";
 import { expirePaymentLink } from "@/lib/adyen";
 import { buscarCartoes, chaveCarteira, cobrarNaCarteira, type CartaoSalvo } from "@/lib/services/coral-carteira";
@@ -54,8 +55,22 @@ async function addLog(
 
 async function tentarDebito(loteId: number, etapa: "D5" | "D10", prazos: PrazosRegua, now: Date): Promise<Tentativa> {
   // 1. O lote ainda está em aberto? (pagamento por outro canal encerra a régua)
-  const fresh = await db.loteCobranca.findUnique({ where: { id: loteId } });
+  let fresh = await db.loteCobranca.findUnique({ where: { id: loteId } });
   if (!fresh || fresh.status !== "EM_REGUA") return "JA_PAGO";
+
+  // 1.1 Com a consulta ao Coral ligada, confirma que o cliente não pagou pelo link antes de debitar (evita cobrança em dobro).
+  // Sem conseguir confirmar, não debita: tenta de novo na próxima execução.
+  if (urlStatusCoral()) {
+    try {
+      await sincronizarPagamentosCoral({ loteId });
+    } catch (error) {
+      await addLog(loteId, etapa, "AGUARDAR_CONFIRMACAO_PAGAMENTO", "Coral", "AGUARDANDO",
+        `Débito adiado: não foi possível confirmar no Coral se o link foi pago (${error instanceof Error ? error.message.replace(/^CONFIG:\s*/, "") : "falha na consulta"}).`);
+      return "AGUARDAR";
+    }
+    fresh = await db.loteCobranca.findUnique({ where: { id: loteId } });
+    if (!fresh || fresh.status !== "EM_REGUA") return "JA_PAGO";
+  }
 
   // 2. Só debita com o link vencido: com o link válido, o cliente ainda pode pagar por ele (cobrança em dobro).
   if (!linkVencido(fresh, prazos.validadeLinkHoras, now)) {

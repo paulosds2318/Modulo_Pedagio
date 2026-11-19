@@ -40,6 +40,9 @@ type Lot = {
   formaPagamento: string | null;
   valorRecebidoCentavos: number | null;
   valorPagoCentavos: number;
+  coralReguaDados: string | null;
+  coralStatusEm: string | null;
+  reguaExecutor?: "coral" | "modulo";
   baixaManual: boolean;
   baixaObservacao: string | null;
   baixaPor: string | null;
@@ -70,6 +73,25 @@ type Lot = {
   }[];
   logs: Entry[];
 };
+type ReguaCoralVista = {
+  etapaTexto: string | null;
+  proximaEtapa: string | null;
+  proximaEm: string | null;
+  encerradaMotivo: string | null;
+  comunicacoes: { etapa: string | null; template: number | null; canal: string | null; enviadoEm: string | null; entrega: string | null }[];
+  debito: { resultado: string | null; em: string | null } | null;
+};
+function parseReguaCoral(json: string | null): ReguaCoralVista | null {
+  if (!json) return null;
+  try {
+    const r = JSON.parse(json) as ReguaCoralVista;
+    return r && typeof r === "object" ? { ...r, comunicacoes: Array.isArray(r.comunicacoes) ? r.comunicacoes : [] } : null;
+  } catch {
+    return null;
+  }
+}
+const MOTIVO_ENCERRAMENTO: Record<string, string> = { PAGO: "Pago", EXTRAJUDICIAL: "Cobrança extrajudicial", CANCELADO: "Cancelado" };
+const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR") : "—");
 const STATUS_LINK: Record<string, string> = { ATIVO: "Ativo", PAGO: "Pago", CANCELADO: "Cancelado" };
 const ORIGEM_LINK: Record<string, string> = { REGUA: "Régua", MANUAL: "Manual", LOTE: "Cobrança em lote" };
 const money = (c: number) =>
@@ -325,27 +347,29 @@ export function LotDetailPage() {
   async function queryAdyen() {
     if (!lot) return;
     const previousStatus = lot.status;
-    if (!(await confirmar({ titulo: "Consultar pagamento na Adyen", mensagem: "Se a Adyen informar que o link foi pago, o lote será baixado.", itens: [{ rotulo: "Lote", valor: `#${lot.id} · ${lot.numeroContrato}` }], confirmarTexto: "Consultar" }))) return;
+    if (!(await confirmar({ titulo: "Consultar pagamento no Coral", mensagem: "O Coral informa se os links do lote foram pagos e em que etapa da régua a cobrança está. Se estiver pago, o lote será baixado.", itens: [{ rotulo: "Lote", valor: `#${lot.id} · ${lot.numeroContrato}` }], confirmarTexto: "Consultar" }))) return;
     setQueryingAdyen(true);
     setError("");
-    setQueryMessage("Consultando o pagamento na Adyen...");
+    setQueryMessage("Consultando o pagamento no Coral...");
     try {
-      const response = await fetch(`/api/lotes/${params.id}/consultar-adyen`, {
+      const response = await fetch(`/api/lotes/${params.id}/consultar-pagamento`, {
         method: "POST",
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || "Falha ao consultar a Adyen.");
-      if (!data || typeof data.statusLote !== "string" || typeof data.statusAdyen !== "string") {
-        throw new Error("A resposta da consulta Adyen veio incompleta. Tente novamente.");
+      if (!response.ok) throw new Error(data?.error || "Falha ao consultar o Coral.");
+      if (!data || typeof data.statusLote !== "string") {
+        throw new Error("A resposta da consulta veio incompleta. Tente novamente.");
       }
       if (data.statusLote !== previousStatus) {
-        setQueryMessage("A Adyen confirmou o pagamento. O lote foi atualizado para Pago.");
+        setQueryMessage(data.statusLote === "PAGO" ? "O Coral confirmou o pagamento. O lote foi atualizado para Pago." : `O lote foi atualizado: ${data.statusLote.replaceAll("_", " ")}.`);
+      } else if (data.parciais > 0) {
+        setQueryMessage("O Coral confirmou o pagamento de parte das passagens. O lote segue em aberto com o restante.");
       } else {
-        setQueryMessage(`Sem atualiza\u00e7\u00f5es: o lote permanece ${data.statusLote.replaceAll("_", " ")}. Status na Adyen: ${data.statusAdyen}.`);
+        setQueryMessage(`Sem atualizações: o lote permanece ${data.statusLote.replaceAll("_", " ")}. ${data.consultados ? "O Coral não registra pagamento nos links." : "Não há link em aberto para consultar."}`);
       }
       await reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao consultar a Adyen.");
+      setError(cause instanceof Error ? cause.message : "Falha ao consultar o Coral.");
     } finally {
       setQueryingAdyen(false);
     }
@@ -370,7 +394,8 @@ export function LotDetailPage() {
     );
   }
   const logStages = new Set(lot.logs.map((x) => x.etapa));
-  const canQueryAdyen = Boolean(lot.adyenLinkId && lot.status !== "PAGO");
+  const canQueryAdyen = Boolean((lot.adyenLinkId || lot.links.length > 0) && STATUS_LOTE_COBRAVEL.includes(lot.status));
+  const reguaCoral = parseReguaCoral(lot.coralReguaDados);
   const podeGerarLink = isAdmin && STATUS_LOTE_COBRAVEL.includes(lot.status);
   const abertas = lot.passagens.filter((p) => p.statusPagamento !== "PAGA" && lot.status !== "PAGO");
   const selecionadas = abertas.filter((p) => !desmarcadas.includes(p.id));
@@ -434,8 +459,8 @@ export function LotDetailPage() {
             <button
               className="button secondary refresh-icon-button"
               type="button"
-              aria-label={queryingAdyen ? "Atualizando lote" : canQueryAdyen ? "Consultar status na Adyen" : "Atualizar detalhes do lote"}
-              title={queryingAdyen ? "Atualizando lote" : canQueryAdyen ? "Consultar status na Adyen" : "Atualizar detalhes do lote"}
+              aria-label={queryingAdyen ? "Atualizando lote" : canQueryAdyen ? "Consultar pagamento no Coral" : "Atualizar detalhes do lote"}
+              title={queryingAdyen ? "Atualizando lote" : canQueryAdyen ? "Consultar pagamento no Coral" : "Atualizar detalhes do lote"}
               disabled={queryingAdyen}
               onClick={() => void (canQueryAdyen ? queryAdyen() : refreshLot())}
             >
@@ -733,6 +758,71 @@ export function LotDetailPage() {
           </table>
         </div>
       </section>
+      {(reguaCoral || lot.reguaExecutor === "coral") && (
+        <section className="panel" id="regua-coral">
+          <div className="panel-head">
+            <div>
+              <h2>Régua no Coral</h2>
+              <p>
+                {lot.reguaExecutor === "coral" ? "As comunicações e as tentativas de débito são executadas pelo Coral; esta é a situação informada por ele." : "Situação informada pelo Coral."}
+                {lot.coralStatusEm && ` Atualizada em ${quando(lot.coralStatusEm)}.`}
+              </p>
+            </div>
+          </div>
+          {reguaCoral ? (
+            <>
+              <p style={{ margin: "0 0 12px" }}>
+                Etapa atual: <span className="strong">{reguaCoral.etapaTexto ?? "não informada"}</span>
+                {reguaCoral.proximaEtapa && (
+                  <>
+                    {" · "}Próxima: <span className="strong">{reguaCoral.proximaEtapa}</span>
+                    {reguaCoral.proximaEm && ` em ${quando(reguaCoral.proximaEm)}`}
+                  </>
+                )}
+                {reguaCoral.encerradaMotivo && (
+                  <>
+                    {" · "}Encerrada: <span className="strong">{MOTIVO_ENCERRAMENTO[reguaCoral.encerradaMotivo] ?? reguaCoral.encerradaMotivo}</span>
+                  </>
+                )}
+                {reguaCoral.debito && (
+                  <>
+                    {" · "}Débito no cartão: <span className="strong">{reguaCoral.debito.resultado ?? "—"}</span>
+                    {reguaCoral.debito.em && ` em ${quando(reguaCoral.debito.em)}`}
+                  </>
+                )}
+              </p>
+              {reguaCoral.comunicacoes.length > 0 && (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Etapa</th>
+                        <th>Template</th>
+                        <th>Canal</th>
+                        <th>Enviado em</th>
+                        <th>Entrega</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reguaCoral.comunicacoes.map((c, indice) => (
+                        <tr key={indice}>
+                          <td className="strong">{c.etapa ?? "—"}</td>
+                          <td>{c.template ?? "—"}</td>
+                          <td>{c.canal ?? "—"}</td>
+                          <td>{quando(c.enviadoEm)}</td>
+                          <td>{c.entrega ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="empty">O Coral ainda não informou a situação da régua deste lote. Use o botão de consultar para atualizar.</p>
+          )}
+        </section>
+      )}
       <section className="panel" id="links">
         <div className="panel-head">
           <div>
